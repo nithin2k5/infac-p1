@@ -1,0 +1,15 @@
+# Database connector - use one of:
+# mysql-connector-python>=8.0.0
+# OR
+# pymysql>=1.0.0
+
+# Minimal dependencies
+# MySQL connector (choose one)
+mysql-connector-python>=8.0.0
+
+# Note: Tkinter is part of Python's standard library but may require system packages:
+# - Ubuntu/Debian: sudo apt-get install python3-tk
+# - macOS: brew install python-tk
+# - Raspberry Pi OS: Usually pre-installed with Python
+# - Windows: Usually included with Python installation
+

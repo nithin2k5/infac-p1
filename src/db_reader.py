@@ -1,0 +1,381 @@
+"""Database reader module for read-only access to MySQL database."""
+import logging
+from typing import List, Dict, Any, Optional, Tuple
+from datetime import datetime
+import json
+
+try:
+    import mysql.connector
+    from mysql.connector import Error
+    MYSQL_AVAILABLE = True
+    USE_PYMYSQL = False
+except ImportError:
+    try:
+        import pymysql
+        MYSQL_AVAILABLE = True
+        USE_PYMYSQL = True
+        # Compatibility wrapper
+        class PyMySQLWrapper:
+            def connect(self, **kwargs):
+                return pymysql.connect(**kwargs)
+            class Error(Exception):
+                pass
+        mysql = PyMySQLWrapper()
+        mysql.connector = mysql
+    except ImportError:
+        MYSQL_AVAILABLE = False
+        USE_PYMYSQL = False
+
+logger = logging.getLogger(__name__)
+
+
+class DatabaseReader:
+    """Read-only database access for monitoring events."""
+    
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 3306,
+        user: str = "root",
+        password: str = "",
+        database: str = "rpi_monitor"
+    ):
+        """
+        Initialize database reader.
+        
+        Args:
+            host: MySQL host
+            port: MySQL port
+            user: MySQL username
+            password: MySQL password
+            database: Database name
+        """
+        if not MYSQL_AVAILABLE:
+            raise ImportError(
+                "MySQL connector not available. Install with: "
+                "pip install mysql-connector-python or pip install pymysql"
+            )
+        
+        self.connection_params = {
+            'host': host,
+            'port': port,
+            'user': user,
+            'password': password,
+            'database': database,
+            'autocommit': True
+        }
+        self.database = database
+    
+    def _get_connection(self):
+        """Get database connection."""
+        try:
+            return mysql.connector.connect(**self.connection_params)
+        except Error as e:
+            logger.error(f"Database connection error: {e}")
+            raise ConnectionError(f"Cannot connect to database: {e}")
+    
+    def test_connection(self) -> bool:
+        """Test database connection."""
+        try:
+            conn = self._get_connection()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.error(f"Connection test failed: {e}")
+            return False
+    
+    def get_events(
+        self,
+        input_id: Optional[str] = None,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+        event_type: Optional[str] = None,
+        search_text: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "timestamp",
+        order_desc: bool = True
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Query events with filters and pagination.
+        
+        Returns:
+            Tuple of (events list, total count)
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(dictionary=True)
+            
+            # Build WHERE clause
+            conditions = []
+            params = []
+            
+            if input_id:
+                conditions.append("e.input_id = %s")
+                params.append(input_id)
+            
+            if start_time:
+                conditions.append("e.timestamp >= %s")
+                params.append(start_time)
+            
+            if end_time:
+                conditions.append("e.timestamp <= %s")
+                params.append(end_time)
+            
+            if event_type:
+                if event_type == "ON":
+                    conditions.append("e.state = 1")
+                elif event_type == "OFF":
+                    conditions.append("e.state = 0")
+            
+            if search_text:
+                conditions.append("(e.input_name LIKE %s OR e.metadata LIKE %s)")
+                search_pattern = f"%{search_text}%"
+                params.extend([search_pattern, search_pattern])
+            
+            where_clause = ""
+            if conditions:
+                where_clause = "WHERE " + " AND ".join(conditions)
+            
+            # Get total count
+            count_query = f"SELECT COUNT(*) as total FROM events e {where_clause}"
+            cursor.execute(count_query, params)
+            total_count = cursor.fetchone()['total']
+            
+            # Build ORDER BY
+            order_clause = f"ORDER BY e.{order_by}"
+            if order_desc:
+                order_clause += " DESC"
+            else:
+                order_clause += " ASC"
+            
+            # Build LIMIT/OFFSET
+            limit_clause = ""
+            if limit:
+                limit_clause = f"LIMIT {limit} OFFSET {offset}"
+            
+            # Main query
+            query = f"""
+                SELECT 
+                    e.id, e.input_id, e.input_name, e.state, e.timestamp,
+                    e.event_counter, e.previous_off_time, e.previous_on_time,
+                    e.metadata, i.on_duration, i.off_interval
+                FROM events e
+                LEFT JOIN intervals i ON e.id = i.event_id
+                {where_clause}
+                {order_clause}
+                {limit_clause}
+            """
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            events = []
+            for row in rows:
+                event = dict(row)
+                # Parse metadata JSON
+                if event.get('metadata'):
+                    try:
+                        event['metadata'] = json.loads(event['metadata'])
+                    except:
+                        pass
+                events.append(event)
+            
+            return events, total_count
+            
+        except Error as e:
+            logger.error(f"Error querying events: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+    
+    def get_event(self, event_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single event by ID."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(dictionary=True)
+            
+            cursor.execute("""
+                SELECT 
+                    e.*, i.on_duration, i.off_interval
+                FROM events e
+                LEFT JOIN intervals i ON e.id = i.event_id
+                WHERE e.id = %s
+            """, (event_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                event = dict(row)
+                if event.get('metadata'):
+                    try:
+                        event['metadata'] = json.loads(event['metadata'])
+                    except:
+                        pass
+                return event
+            return None
+            
+        except Error as e:
+            logger.error(f"Error getting event: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+    
+    def get_statistics(
+        self,
+        input_id: Optional[str] = None,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Get statistics for events."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(dictionary=True)
+            
+            conditions = []
+            params = []
+            
+            if input_id:
+                conditions.append("input_id = %s")
+                params.append(input_id)
+            
+            if start_time:
+                conditions.append("timestamp >= %s")
+                params.append(start_time)
+            
+            if end_time:
+                conditions.append("timestamp <= %s")
+                params.append(end_time)
+            
+            where_clause = ""
+            if conditions:
+                where_clause = "WHERE " + " AND ".join(conditions)
+            
+            # Basic stats
+            cursor.execute(f"""
+                SELECT 
+                    COUNT(*) as total_events,
+                    COUNT(DISTINCT input_id) as unique_inputs,
+                    MIN(timestamp) as first_event,
+                    MAX(timestamp) as last_event
+                FROM events
+                {where_clause}
+            """, params)
+            
+            stats = dict(cursor.fetchone())
+            
+            # Counts per input
+            cursor.execute(f"""
+                SELECT input_id, input_name, COUNT(*) as count
+                FROM events
+                {where_clause}
+                GROUP BY input_id, input_name
+            """, params)
+            
+            stats['counts_per_input'] = {row['input_id']: {
+                'name': row['input_name'],
+                'count': row['count']
+            } for row in cursor.fetchall()}
+            
+            # Counts by state
+            cursor.execute(f"""
+                SELECT state, COUNT(*) as count
+                FROM events
+                {where_clause}
+                GROUP BY state
+            """, params)
+            
+            state_rows = cursor.fetchall()
+            stats['counts_by_state'] = {
+                'ON': sum(row['count'] for row in state_rows if row['state'] == 1),
+                'OFF': sum(row['count'] for row in state_rows if row['state'] == 0)
+            }
+            
+            # Outage stats
+            cursor.execute(f"""
+                SELECT 
+                    COUNT(*) as total_outages,
+                    AVG(duration_seconds) as avg_duration,
+                    SUM(duration_seconds) as total_duration
+                FROM outages
+                WHERE duration_seconds IS NOT NULL
+            """)
+            
+            outage_row = cursor.fetchone()
+            stats['outages'] = {
+                'total': outage_row['total_outages'] or 0,
+                'avg_duration': outage_row['avg_duration'] or 0,
+                'total_duration': outage_row['total_duration'] or 0
+            }
+            
+            return stats
+            
+        except Error as e:
+            logger.error(f"Error getting statistics: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+    
+    def get_latest_states(self) -> Dict[str, Dict[str, Any]]:
+        """Get latest state for each input."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(dictionary=True)
+            
+            cursor.execute("""
+                SELECT e1.input_id, e1.input_name, e1.state, e1.timestamp, e1.event_counter
+                FROM events e1
+                WHERE e1.timestamp = (
+                    SELECT MAX(e2.timestamp)
+                    FROM events e2
+                    WHERE e2.input_id = e1.input_id
+                )
+            """)
+            
+            states = {}
+            for row in cursor.fetchall():
+                states[row['input_id']] = {
+                    'name': row['input_name'],
+                    'state': row['state'],
+                    'timestamp': row['timestamp'],
+                    'counter': row['event_counter']
+                }
+            
+            return states
+            
+        except Error as e:
+            logger.error(f"Error getting latest states: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+    
+    def get_active_outage(self) -> Optional[Dict[str, Any]]:
+        """Get currently active outage if any."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(dictionary=True)
+            
+            cursor.execute("""
+                SELECT * FROM outages
+                WHERE outage_end IS NULL
+                ORDER BY outage_start DESC
+                LIMIT 1
+            """)
+            
+            return cursor.fetchone()
+            
+        except Error as e:
+            logger.error(f"Error getting active outage: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+
