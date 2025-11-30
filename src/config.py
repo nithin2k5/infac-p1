@@ -109,3 +109,4 @@ class Config:
         """Get UI configuration."""
         return self._config.get("ui", {})
 
+

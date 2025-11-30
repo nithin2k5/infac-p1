@@ -65,6 +65,85 @@ class DatabaseReader:
             'autocommit': True
         }
         self.database = database
+        
+        # Ensure database and tables exist
+        self._ensure_database_and_tables()
+    
+    def _ensure_database_and_tables(self) -> None:
+        """Ensure database and tables exist."""
+        try:
+            # Connect without database first
+            params = self.connection_params.copy()
+            params.pop('database', None)
+            conn = mysql.connector.connect(**params)
+            cursor = conn.cursor()
+            
+            # Create database if it doesn't exist
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.database}")
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"Database '{self.database}' ensured to exist")
+            
+            # Now connect to the database and create tables
+            conn = mysql.connector.connect(**self.connection_params)
+            cursor = conn.cursor()
+            
+            # Events table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS events (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    input_id VARCHAR(50) NOT NULL,
+                    input_name VARCHAR(100) NOT NULL,
+                    state INT NOT NULL,
+                    timestamp DOUBLE NOT NULL,
+                    event_counter INT NOT NULL,
+                    previous_off_time DOUBLE,
+                    previous_on_time DOUBLE,
+                    metadata TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_input_timestamp (input_id, timestamp),
+                    INDEX idx_timestamp (timestamp)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            
+            # Intervals table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS intervals (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    event_id INT NOT NULL,
+                    input_id VARCHAR(50) NOT NULL,
+                    on_duration DOUBLE,
+                    off_interval DOUBLE,
+                    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            
+            # Outages table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS outages (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    outage_start DOUBLE NOT NULL,
+                    outage_end DOUBLE,
+                    generator_input_id VARCHAR(50),
+                    generator_start_time DOUBLE,
+                    duration_seconds DOUBLE,
+                    notification_sent INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_outage_start (outage_start)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"Tables ensured to exist in '{self.database}'")
+            
+        except Error as e:
+            logger.error(f"Error ensuring database/tables: {e}")
+            raise
     
     def _get_connection(self):
         """Get database connection."""
