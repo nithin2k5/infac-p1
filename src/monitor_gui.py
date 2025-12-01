@@ -142,26 +142,44 @@ class MonitorGUI:
         self._build_report_page()
     
     def _build_dashboard_page(self) -> None:
-        """Build the Status Dashboard page (Page 1) with two sections."""
+        """
+        Build the Status Dashboard page (Page 1).
+        
+        Layout:
+          - Title (fixed)
+          - Status indicators area pinned to ~40% of the page height
+          - Combined graph for all 4 power inputs in the remaining space
+        """
+        # Configure grid so indicators take ~40% and graph ~60%
+        self.dashboard_frame.columnconfigure(0, weight=1)
+        # Title row (fixed height)
+        self.dashboard_frame.rowconfigure(0, weight=0)
+        # Indicators row (~40%)
+        self.dashboard_frame.rowconfigure(1, weight=2)
+        # Graph row (~60%)
+        self.dashboard_frame.rowconfigure(2, weight=3)
+        # Controls row (fixed)
+        self.dashboard_frame.rowconfigure(3, weight=0)
+        
         # Title
         title_label = ttk.Label(
             self.dashboard_frame,
             text="Generator Power Status Monitor",
             font=("Arial", 16, "bold")
         )
-        title_label.pack(pady=(0, 10))
+        title_label.grid(row=0, column=0, pady=(0, 10), sticky="w")
         
-        # ========== SECTION 1: STATUS INDICATORS ==========
+        # ========== SECTION 1: STATUS INDICATORS (TOP ~40%) ==========
         indicators_section = ttk.LabelFrame(
             self.dashboard_frame,
             text="Status Indicators",
             padding="10"
         )
-        indicators_section.pack(fill=tk.BOTH, expand=False, pady=(0, 10))
+        indicators_section.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
         
-        # Container for status cards
+        # Container for status cards (single row with 4 compact indicators)
         cards_container = ttk.Frame(indicators_section)
-        cards_container.pack(fill=tk.X, expand=False)
+        cards_container.pack(fill=tk.BOTH, expand=True)
         
         # Create status cards for each input
         self.status_cards = {}
@@ -172,36 +190,32 @@ class MonitorGUI:
             ('gen3', 'GEN3', 'Generator 3')
         ]
         
-        # Create grid layout (2x2)
-        for idx, (input_id, title, subtitle) in enumerate(inputs):
-            row = idx // 2
-            col = idx % 2
+        # Four indicators in a single line
+        for col, (input_id, title, subtitle) in enumerate(inputs):
+            # Status card frame (reduced padding for smaller size)
+            card_frame = ttk.LabelFrame(cards_container, text=title, padding="10")
+            card_frame.grid(row=0, column=col, padx=10, pady=10, sticky="nsew")
             
-            # Status card frame
-            card_frame = ttk.LabelFrame(cards_container, text=title, padding="20")
-            card_frame.grid(row=row, column=col, padx=15, pady=15, sticky="nsew")
-            
-            # Configure grid weights
+            # Configure grid weights so all four share width evenly
             cards_container.columnconfigure(col, weight=1)
-            cards_container.rowconfigure(row, weight=1)
-            
+        
             # Build status card
             self._build_status_card(card_frame, input_id, subtitle)
         
-        # ========== SECTION 2: STATE HISTORY GRAPH ==========
+        # ========== SECTION 2: COMBINED GRAPH (BOTTOM ~60%) ==========
         graph_section = ttk.LabelFrame(
             self.dashboard_frame,
-            text="State History Graph - All Inputs Combined",
+            text="Power Inputs History (All Sources)",
             padding="10"
         )
-        graph_section.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        graph_section.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
         
-        # Build graph panel inside graph section
+        # Build the combined graph for all 4 inputs
         self._build_graph_panel(graph_section)
         
         # Bottom controls
         controls_frame = ttk.Frame(self.dashboard_frame)
-        controls_frame.pack(fill=tk.X, pady=(0, 5))
+        controls_frame.grid(row=3, column=0, sticky="ew", pady=(0, 5))
         
         # Last updated label
         self.last_updated_label = ttk.Label(
@@ -238,46 +252,30 @@ class MonitorGUI:
         ttk.Label(
             parent,
             text=subtitle,
-            font=("Arial", 10),
+            font=("Arial", 9),
             foreground="gray"
-        ).pack(pady=(0, 15))
+        ).pack(pady=(0, 8))
         
         # LED indicator (larger for dashboard)
         led_container = ttk.Frame(parent)
-        led_container.pack(pady=10)
+        led_container.pack(pady=5)
         
-        led_canvas = tk.Canvas(led_container, width=100, height=100, highlightthickness=0, bg='white')
+        # Slightly smaller LED to reduce overall card height
+        led_canvas = tk.Canvas(led_container, width=70, height=70, highlightthickness=0, bg='white')
         led_canvas.pack()
         
         # Draw LED circle (will be updated based on state)
-        glow_circle = led_canvas.create_oval(5, 5, 95, 95, fill="#e0e0e0", outline="", state="hidden")
-        led_circle = led_canvas.create_oval(25, 25, 75, 75, fill="#cccccc", outline="#888888", width=3)
+        glow_circle = led_canvas.create_oval(3, 3, 67, 67, fill="#e0e0e0", outline="", state="hidden")
+        led_circle = led_canvas.create_oval(18, 18, 52, 52, fill="#cccccc", outline="#888888", width=2)
         
         # Status label
         status_label = ttk.Label(
             parent,
             text="OFF",
-            font=("Arial", 14, "bold"),
+            font=("Arial", 11, "bold"),
             foreground="#666666"
         )
-        status_label.pack(pady=5)
-        
-        # Power bar/meter representation
-        power_frame = ttk.LabelFrame(parent, text="Power Level", padding="10")
-        power_frame.pack(fill=tk.X, pady=10)
-        
-        # Power bar canvas
-        power_canvas = tk.Canvas(power_frame, height=30, highlightthickness=1, highlightbackground="#cccccc", bg='white')
-        power_canvas.pack(fill=tk.X, pady=5)
-        
-        power_bar = power_canvas.create_rectangle(2, 2, 2, 28, fill="#cccccc", outline="")
-        
-        power_label = ttk.Label(
-            power_frame,
-            text="0%",
-            font=("Arial", 10, "bold")
-        )
-        power_label.pack()
+        status_label.pack(pady=3)
         
         # Timestamp label
         timestamp_label = ttk.Label(
@@ -286,7 +284,7 @@ class MonitorGUI:
             font=("Arial", 8),
             foreground="gray"
         )
-        timestamp_label.pack(pady=5)
+        timestamp_label.pack(pady=3)
         
         # Store references
         self.status_cards[input_id] = {
@@ -294,9 +292,6 @@ class MonitorGUI:
             'circle': led_circle,
             'glow_circle': glow_circle,
             'status_label': status_label,
-            'power_canvas': power_canvas,
-            'power_bar': power_bar,
-            'power_label': power_label,
             'timestamp_label': timestamp_label,
             'state': None
         }
@@ -344,8 +339,13 @@ class MonitorGUI:
             
             inputs = ['eb', 'gen1', 'gen2', 'gen3']
             input_names = {'eb': 'EB', 'gen1': 'GEN1', 'gen2': 'GEN2', 'gen3': 'GEN3'}
-            # Red for all when ON (matching dashboard LEDs), different line styles for distinction
-            colors = {'eb': '#ff0000', 'gen1': '#ff0000', 'gen2': '#ff0000', 'gen3': '#ff0000'}
+            # Distinct colors for each power input so they are easy to differentiate
+            colors = {
+                'eb': '#0077ff',    # EB - blue
+                'gen1': '#00aa55',  # GEN1 - green
+                'gen2': '#ff8800',  # GEN2 - orange
+                'gen3': '#cc0000',  # GEN3 - red
+            }
             linestyles = {'eb': '-', 'gen1': '--', 'gen2': '-.', 'gen3': ':'}
             
             # Clear previous plot
@@ -468,9 +468,6 @@ class MonitorGUI:
                 circle_id = card_data['circle']
                 glow_circle_id = card_data['glow_circle']
                 status_label = card_data['status_label']
-                power_canvas = card_data['power_canvas']
-                power_bar = card_data['power_bar']
-                power_label = card_data['power_label']
                 timestamp_label = card_data['timestamp_label']
                 
                 # Update LED and power representation based on state
@@ -506,18 +503,6 @@ class MonitorGUI:
                 # Update status label
                 status_label.config(text=status_text, foreground=status_fg)
                 
-                # Update power bar
-                power_canvas.update_idletasks()  # Ensure canvas is rendered
-                canvas_width = power_canvas.winfo_width()
-                if canvas_width > 1:
-                    bar_width = int((power_level / 100) * (canvas_width - 4))
-                    power_canvas.coords(power_bar, 2, 2, max(2, bar_width + 2), 28)
-                    power_canvas.itemconfig(power_bar, fill=power_color)
-                    power_label.config(text=f"{power_level}%")
-                else:
-                    # Canvas not ready yet, schedule update
-                    power_canvas.after(100, lambda c=card_data, s=state: self._update_power_bar(c, s))
-                
                 # Update timestamp
                 if timestamp:
                     try:
@@ -539,22 +524,6 @@ class MonitorGUI:
                 
         except Exception as e:
             logger.error(f"Error updating status indicators: {e}", exc_info=True)
-    
-    def _update_power_bar(self, card_data: Dict[str, Any], state: int) -> None:
-        """Update power bar after canvas is rendered."""
-        power_canvas = card_data['power_canvas']
-        power_bar = card_data['power_bar']
-        power_label = card_data['power_label']
-        
-        power_level = 100 if state == 1 else 0
-        power_color = "#ff0000" if state == 1 else "#cccccc"
-        
-        canvas_width = power_canvas.winfo_width()
-        if canvas_width > 1:
-            bar_width = int((power_level / 100) * (canvas_width - 4))
-            power_canvas.coords(power_bar, 2, 2, max(2, bar_width + 2), 28)
-            power_canvas.itemconfig(power_bar, fill=power_color)
-            power_label.config(text=f"{power_level}%")
     
     def _build_filters_panel(self, parent) -> None:
         """Build filter controls panel."""
@@ -809,23 +778,6 @@ class MonitorGUI:
             
             # Update graph
             self._update_graph()
-            
-            # Update power bars canvas width (needed for proper rendering)
-            for input_id, card_data in self.status_cards.items():
-                power_canvas = card_data['power_canvas']
-                power_bar = card_data['power_bar']
-                state = card_data.get('state', 0)
-                
-                # Update canvas dimensions
-                power_canvas.update_idletasks()
-                canvas_width = power_canvas.winfo_width()
-                
-                if canvas_width > 1:
-                    power_level = 100 if state == 1 else 0
-                    power_color = "#ff0000" if state == 1 else "#cccccc"
-                    bar_width = int((power_level / 100) * (canvas_width - 4))
-                    power_canvas.coords(power_bar, 2, 2, max(2, bar_width + 2), 28)
-                    power_canvas.itemconfig(power_bar, fill=power_color)
             
         except Exception as e:
             logger.error(f"Error refreshing data: {e}", exc_info=True)
