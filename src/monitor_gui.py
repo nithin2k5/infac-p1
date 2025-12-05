@@ -17,6 +17,7 @@ try:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
     import matplotlib.pyplot as plt
+    import numpy as np
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -69,6 +70,8 @@ class MonitorGUI:
         # State
         self.current_page = 0
         self.total_events = 0
+        self.eb_history_page = 0
+        self.total_eb_history = 0
         self.selected_events: List[int] = []
         self.auto_refresh_enabled = False
         self.auto_refresh_timer: Optional[threading.Timer] = None
@@ -94,6 +97,20 @@ class MonitorGUI:
         window_height = ui_config.get("window_height", 800)
         self.root.geometry(f"{window_width}x{window_height}")
         self.root.title("Raspberry Pi Monitor - Power Status & Events")
+        
+        # Try to start in full-screen / maximized mode
+        try:
+            # Windows / some platforms
+            self.root.state("zoomed")
+        except Exception:
+            try:
+                # Fallback: set to full-screen if zoomed state unsupported
+                self.root.attributes("-fullscreen", True)
+            except Exception:
+                # Last resort: manually resize to screen resolution
+                screen_w = self.root.winfo_screenwidth()
+                screen_h = self.root.winfo_screenheight()
+                self.root.geometry(f"{screen_w}x{screen_h}")
         
         # Setup UI
         self._build_ui()
@@ -140,6 +157,11 @@ class MonitorGUI:
         self.report_frame = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(self.report_frame, text="Events Report")
         self._build_report_page()
+        
+        # Page 3: EB Power History
+        self.eb_history_frame = ttk.Frame(self.notebook, padding="10")
+        self.notebook.add(self.eb_history_frame, text="EB Power History")
+        self._build_eb_history_page()
     
     def _build_dashboard_page(self) -> None:
         """
@@ -310,13 +332,10 @@ class MonitorGUI:
         self.graph_fig = Figure(figsize=(12, 5), dpi=100)
         self.graph_ax = self.graph_fig.add_subplot(111)
         
-        # Configure axis
+        # Initial axis configuration (will be refined on each update)
         self.graph_ax.set_xlabel('Time')
-        self.graph_ax.set_ylabel('State (ON=1, OFF=0)')
-        self.graph_ax.set_title('All Input States Over Time')
-        self.graph_ax.set_ylim(-0.2, 1.2)
-        self.graph_ax.set_yticks([0, 1])
-        self.graph_ax.set_yticklabels(['OFF', 'ON'])
+        self.graph_ax.set_ylabel('Inputs')
+        self.graph_ax.set_title('Power Inputs Timeline')
         self.graph_ax.grid(True, alpha=0.3)
         
         # Embed in tkinter
@@ -347,6 +366,8 @@ class MonitorGUI:
                 'gen3': '#cc0000',  # GEN3 - red
             }
             linestyles = {'eb': '-', 'gen1': '--', 'gen2': '-.', 'gen3': ':'}
+            # Map each input to a vertical position on the Y-axis
+            y_positions = {'eb': 3, 'gen1': 2, 'gen2': 1, 'gen3': 0}
             
             # Clear previous plot
             self.graph_ax.clear()
@@ -369,42 +390,41 @@ class MonitorGUI:
                         # Extract timestamps and states
                         times = [datetime.fromtimestamp(e['timestamp']) for e in events]
                         states = [e['state'] for e in events]
-                        
+
                         # Add current state if needed (extend to current time)
                         if times[-1] < datetime.now():
                             times.append(datetime.now())
                             states.append(states[-1])  # Keep last state
-                        
-                        # Create step plot (state changes)
+
+                        # Map ON states to the input's row position; hide OFF as gaps
+                        y_val = y_positions.get(input_id, 0)
+                        y_series = [y_val if s == 1 else np.nan for s in states]
+
                         input_name = input_names.get(input_id, input_id.upper())
+
+                        # Plot horizontal timeline for ON periods of this input
                         self.graph_ax.step(
-                            times, states,
+                            times,
+                            y_series,
                             where='post',
                             label=input_name,
                             linewidth=2.5,
                             color=colors.get(input_id, '#ff0000'),
                             linestyle=linestyles.get(input_id, '-'),
-                            alpha=0.9
-                        )
-                        
-                        # Mark ON states with filled area for better visibility
-                        self.graph_ax.fill_between(
-                            times, 0, states,
-                            step='post',
-                            alpha=0.25,
-                            color=colors.get(input_id, '#ff0000')
+                            alpha=0.9,
                         )
                 
                 except Exception as e:
                     logger.error(f"Error plotting {input_id}: {e}")
             
-            # Configure axis
+            # Configure axis for time vs inputs
             self.graph_ax.set_xlabel('Time', fontsize=10)
-            self.graph_ax.set_ylabel('State', fontsize=10)
-            self.graph_ax.set_title('All Input States Over Time (Last 4 Hours)', fontsize=12, fontweight='bold')
-            self.graph_ax.set_ylim(-0.1, 1.1)
-            self.graph_ax.set_yticks([0, 1])
-            self.graph_ax.set_yticklabels(['OFF', 'ON'])
+            self.graph_ax.set_ylabel('Inputs', fontsize=10)
+            self.graph_ax.set_title('EB / GEN1 / GEN2 / GEN3 Timeline (Last 4 Hours)', fontsize=12, fontweight='bold')
+            # Y-axis shows one row per input
+            self.graph_ax.set_ylim(-0.5, 3.5)
+            self.graph_ax.set_yticks([0, 1, 2, 3])
+            self.graph_ax.set_yticklabels(['GEN3', 'GEN2', 'GEN1', 'EB'])
             self.graph_ax.grid(True, alpha=0.3, linestyle='--')
             
             if has_data:
@@ -434,24 +454,95 @@ class MonitorGUI:
         # Bottom toolbar
         self._build_toolbar(self.report_frame)
     
+    def _build_eb_history_page(self) -> None:
+        """Build the EB Power History page (Page 3)."""
+        # Title
+        title_label = ttk.Label(
+            self.eb_history_frame,
+            text="EB Power Cut History",
+            font=("Arial", 14, "bold")
+        )
+        title_label.pack(pady=(0, 10))
+        
+        # Description
+        desc_label = ttk.Label(
+            self.eb_history_frame,
+            text="Shows when EB power was turned OFF and when it turned back ON, with duration",
+            font=("Arial", 9),
+            foreground="gray"
+        )
+        desc_label.pack(pady=(0, 10))
+        
+        # Table frame
+        table_frame = ttk.LabelFrame(self.eb_history_frame, text="Power Cut Events", padding="10")
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        
+        # Table with scrollbars
+        tree_frame = ttk.Frame(table_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Define columns
+        columns = ("#", "OFF Time", "ON Time", "Duration", "Status")
+        self.eb_history_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=20)
+        
+        # Configure columns
+        column_widths = {
+            "#": 50,
+            "OFF Time": 180,
+            "ON Time": 180,
+            "Duration": 120,
+            "Status": 100
+        }
+        
+        for col in columns:
+            self.eb_history_tree.heading(col, text=col)
+            self.eb_history_tree.column(col, width=column_widths.get(col, 100))
+        
+        # Scrollbars
+        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.eb_history_tree.yview)
+        h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.eb_history_tree.xview)
+        self.eb_history_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
+        self.eb_history_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+        
+        # Pagination controls
+        pagination_frame = ttk.Frame(table_frame)
+        pagination_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        self.eb_history_page_info_label = ttk.Label(pagination_frame, text="Page 1 of 1")
+        self.eb_history_page_info_label.pack(side=tk.LEFT)
+        
+        button_frame = ttk.Frame(pagination_frame)
+        button_frame.pack(side=tk.RIGHT)
+        
+        ttk.Button(button_frame, text="◄ First", command=self.eb_history_first_page).pack(side=tk.LEFT, padx=2)
+        ttk.Button(button_frame, text="◄ Prev", command=self.eb_history_prev_page).pack(side=tk.LEFT, padx=2)
+        ttk.Button(button_frame, text="Next ►", command=self.eb_history_next_page).pack(side=tk.LEFT, padx=2)
+        ttk.Button(button_frame, text="Last ►", command=self.eb_history_last_page).pack(side=tk.LEFT, padx=2)
+        
+        # Bottom toolbar
+        toolbar = ttk.Frame(self.eb_history_frame)
+        toolbar.pack(fill=tk.X)
+        
+        ttk.Button(toolbar, text="Refresh (F5)", command=self.refresh_data).pack(side=tk.LEFT, padx=2)
+    
     def _build_statistics_panel(self, parent) -> None:
         """Build statistics display panel for report page."""
         stats_frame = ttk.LabelFrame(parent, text="Statistics", padding="10")
         stats_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Create a canvas with scrollbar for stats
-        stats_canvas = tk.Canvas(stats_frame, height=80)
-        stats_scroll = ttk.Scrollbar(stats_frame, orient="horizontal", command=stats_canvas.xview)
-        stats_inner = ttk.Frame(stats_canvas)
-        
-        stats_canvas.configure(xscrollcommand=stats_scroll.set)
-        stats_canvas.create_window((0, 0), window=stats_inner, anchor="nw")
-        
-        stats_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        stats_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        # Simple inner frame centered within the statistics area
+        stats_inner = ttk.Frame(stats_frame)
+        stats_inner.pack(anchor="center")
         
         self.stats_inner = stats_inner
-        self.stats_canvas = stats_canvas
+        # No scrolling canvas is used for stats in this layout
+        self.stats_canvas = None
     
     def _update_led_indicators(self) -> None:
         """Update LED indicators and power bars on dashboard based on latest states."""
@@ -779,6 +870,10 @@ class MonitorGUI:
             # Update graph
             self._update_graph()
             
+            # Update EB history (only if on EB history page)
+            if hasattr(self, 'eb_history_tree'):
+                self._load_eb_history()
+            
         except Exception as e:
             logger.error(f"Error refreshing data: {e}", exc_info=True)
             messagebox.showerror("Error", f"Failed to refresh data: {e}")
@@ -907,13 +1002,15 @@ class MonitorGUI:
             
             for label, value in stat_items:
                 frame = ttk.Frame(self.stats_inner)
-                frame.pack(side=tk.LEFT, padx=10, pady=5)
+                # Pack side-by-side, centered as a group, with small 2px spacing
+                frame.pack(side=tk.LEFT, padx=2, pady=2)
                 ttk.Label(frame, text=label, font=("Arial", 9)).pack()
                 ttk.Label(frame, text=value, font=("Arial", 11, "bold")).pack()
             
-            # Update canvas scroll region
-            self.stats_inner.update_idletasks()
-            self.stats_canvas.configure(scrollregion=self.stats_canvas.bbox("all"))
+            # Update layout if a canvas were present (kept safe for future changes)
+            if getattr(self, "stats_canvas", None) is not None:
+                self.stats_inner.update_idletasks()
+                self.stats_canvas.configure(scrollregion=self.stats_canvas.bbox("all"))
             
         except Exception as e:
             logger.error(f"Error updating statistics: {e}", exc_info=True)
@@ -1011,6 +1108,77 @@ class MonitorGUI:
         if total_pages > 0:
             self.current_page = total_pages - 1
             self.refresh_data()
+    
+    def _load_eb_history(self) -> None:
+        """Load EB power history from database with pagination."""
+        try:
+            # Get EB history with pagination
+            offset = self.eb_history_page * self.page_size
+            history, total = self.db.get_eb_power_history(
+                limit=self.page_size,
+                offset=offset
+            )
+            
+            self.total_eb_history = total
+            
+            # Clear table
+            for item in self.eb_history_tree.get_children():
+                self.eb_history_tree.delete(item)
+            
+            # Populate table
+            for idx, event in enumerate(history, start=offset + 1):
+                off_time_str = self._format_timestamp(event['off_time'])
+                on_time_str = self._format_timestamp(event['on_time']) if event['on_time'] else "Ongoing"
+                duration_str = self._format_duration(event['duration_seconds']) if event['duration_seconds'] else "-"
+                status = event['status']
+                
+                # Color code: Ongoing = red, Completed = green
+                tag = "ongoing" if status == "Ongoing" else "completed"
+                self.eb_history_tree.insert(
+                    "", tk.END,
+                    values=(idx, off_time_str, on_time_str, duration_str, status),
+                    tags=(tag,)
+                )
+            
+            # Configure tag colors
+            self.eb_history_tree.tag_configure("ongoing", foreground="red")
+            self.eb_history_tree.tag_configure("completed", foreground="green")
+            
+            # Update pagination info
+            total_pages = (total + self.page_size - 1) // self.page_size if total > 0 else 1
+            current_page_display = self.eb_history_page + 1 if total > 0 else 0
+            self.eb_history_page_info_label.config(
+                text=f"Page {current_page_display} of {total_pages} ({total} total events)"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error loading EB history: {e}", exc_info=True)
+            messagebox.showerror("Error", f"Failed to load EB history: {e}")
+    
+    def eb_history_first_page(self) -> None:
+        """Go to first page of EB history."""
+        self.eb_history_page = 0
+        self._load_eb_history()
+    
+    def eb_history_prev_page(self) -> None:
+        """Go to previous page of EB history."""
+        if self.eb_history_page > 0:
+            self.eb_history_page -= 1
+            self._load_eb_history()
+    
+    def eb_history_next_page(self) -> None:
+        """Go to next page of EB history."""
+        total_pages = (self.total_eb_history + self.page_size - 1) // self.page_size if self.total_eb_history > 0 else 1
+        if self.eb_history_page < total_pages - 1:
+            self.eb_history_page += 1
+            self._load_eb_history()
+    
+    def eb_history_last_page(self) -> None:
+        """Go to last page of EB history."""
+        total_pages = (self.total_eb_history + self.page_size - 1) // self.page_size if self.total_eb_history > 0 else 1
+        if total_pages > 0:
+            self.eb_history_page = total_pages - 1
+            self._load_eb_history()
     
     def view_event_details(self) -> None:
         """View details of selected event."""

@@ -457,4 +457,84 @@ class DatabaseReader:
         finally:
             if conn and conn.is_connected():
                 conn.close()
+    
+    def get_eb_power_history(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Get EB power cut history - pairs OFF events with ON events.
+        
+        Returns:
+            Tuple of (power history list, total count)
+            Each item contains: off_time, on_time, duration_seconds, status
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(dictionary=True)
+            
+            # Get all EB events ordered by timestamp
+            cursor.execute("""
+                SELECT id, state, timestamp
+                FROM events
+                WHERE input_id = 'eb'
+                ORDER BY timestamp DESC
+            """)
+            
+            all_events = cursor.fetchall()
+            
+            # Pair OFF events with their corresponding ON events
+            power_history = []
+            current_off = None
+            
+            for event in all_events:
+                if event['state'] == 0:  # OFF event
+                    # If we already have an unclosed OFF, close it first
+                    if current_off:
+                        power_history.append({
+                            'off_time': current_off['timestamp'],
+                            'on_time': None,
+                            'duration_seconds': None,
+                            'status': 'Ongoing'
+                        })
+                    current_off = event
+                elif event['state'] == 1:  # ON event
+                    if current_off:
+                        # Calculate duration
+                        duration = event['timestamp'] - current_off['timestamp']
+                        power_history.append({
+                            'off_time': current_off['timestamp'],
+                            'on_time': event['timestamp'],
+                            'duration_seconds': duration,
+                            'status': 'Completed'
+                        })
+                        current_off = None
+            
+            # If there's still an unclosed OFF event, add it
+            if current_off:
+                power_history.append({
+                    'off_time': current_off['timestamp'],
+                    'on_time': None,
+                    'duration_seconds': None,
+                    'status': 'Ongoing'
+                })
+            
+            total_count = len(power_history)
+            
+            # Apply pagination
+            if limit:
+                power_history = power_history[offset:offset + limit]
+            else:
+                power_history = power_history[offset:]
+            
+            return power_history, total_count
+            
+        except Error as e:
+            logger.error(f"Error getting EB power history: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
 
