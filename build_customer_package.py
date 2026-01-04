@@ -66,12 +66,20 @@ def main():
     
     # Clean previous builds
     print_step(1, 7, "Cleaning previous builds...")
-    if dist_dir.exists():
-        shutil.rmtree(dist_dir)
-    if build_dir.exists():
-        shutil.rmtree(dist_dir)
-    dist_dir.mkdir(parents=True)
-    build_dir.mkdir(parents=True)
+    try:
+        if dist_dir.exists():
+            shutil.rmtree(dist_dir)
+    except Exception as e:
+        print(f"Warning: Could not remove {dist_dir}: {e}")
+    
+    try:
+        if build_dir.exists():
+            shutil.rmtree(build_dir)
+    except Exception as e:
+        print(f"Warning: Could not remove {build_dir}: {e}")
+    
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    build_dir.mkdir(parents=True, exist_ok=True)
     print_success("Clean")
     print()
     
