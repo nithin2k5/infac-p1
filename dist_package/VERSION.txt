@@ -1,0 +1,24 @@
+Power Monitor - Customer Distribution Package
+==============================================
+
+Version: 1.0.0
+Build Date: Sun Jan  4 16:50:25 IST 2026
+Package Type: Compiled (No source code)
+
+Contents:
+- Compiled Python bytecode (.pyc files)
+- Installation script
+- Configuration template
+- Documentation
+- License
+
+Installation:
+1. Extract archive
+2. Run: sudo ./install.sh
+3. Configure database
+4. Wire GPIO connections
+
+Support: See documentation files
+
+Copyright (c) 2026 Nithin Kumar K
+Licensed under MIT License

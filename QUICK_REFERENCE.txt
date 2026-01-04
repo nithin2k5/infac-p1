@@ -1,0 +1,159 @@
+================================================================================
+                  POWER MONITOR - QUICK REFERENCE CARD
+================================================================================
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                         FOR YOU (DEVELOPER)                               ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+BUILD CUSTOMER PACKAGE:
+-----------------------
+cd /Users/nithinkumark/Developer/python/infac-p1
+python3 build_customer_package.py
+
+CREATE ARCHIVE:
+---------------
+cd customer_package
+tar -czf power-monitor-installer.tar.gz power-monitor/
+
+SEND TO CUSTOMER:
+-----------------
+power-monitor-installer.tar.gz
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                         FOR CUSTOMER                                      ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+INSTALL:
+--------
+tar -xzf power-monitor-installer.tar.gz
+cd power-monitor
+sudo ./install.sh
+
+MYSQL CONFIGURATION:
+--------------------
+(Automatic during installation)
+- Just enter MySQL password
+- Everything else is automatic
+
+WHATSAPP SETUP (OPTIONAL):
+---------------------------
+sudo nano /opt/power-monitor/.env
+
+Add:
+WHATSAPP_ENABLED=true
+WHATSAPP_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=your_sid
+TWILIO_AUTH_TOKEN=your_token
+TWILIO_FROM_NUMBER=whatsapp:+14155238886
+TWILIO_TO_NUMBER=whatsapp:+919876543210
+
+Restart:
+sudo systemctl restart power-monitor
+
+GPIO CONNECTIONS:
+-----------------
+Pin 11 (GPIO 17) ← EB
+Pin 13 (GPIO 27) ← GEN1
+Pin 15 (GPIO 22) ← GEN2
+Pin 6  (GND)     ← Ground
+
+USE:
+----
+Double-click "Power Monitor" desktop icon
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                      SERVICE MANAGEMENT                                   ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+Status:     sudo systemctl status power-monitor
+Start:      sudo systemctl start power-monitor
+Stop:       sudo systemctl stop power-monitor
+Restart:    sudo systemctl restart power-monitor
+Logs:       sudo journalctl -u power-monitor -f
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                      WHAT CUSTOMER GETS                                   ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+✓ 24/7 background service (auto-starts on boot)
+✓ Desktop GUI application
+✓ WhatsApp notifications (optional)
+✓ Real-time GPIO monitoring
+✓ MySQL database recording
+✓ Event reports and graphs
+✓ CSV export
+✓ Desktop shortcut
+✓ Application menu entry
+
+✗ NO source code (.py files)
+✗ Only compiled bytecode (.pyc files)
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                      WHATSAPP NOTIFICATIONS                               ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+POWER OUTAGE:
+-------------
+⚠️ POWER OUTAGE DETECTED
+EB Power: OFF
+Time: 2026-01-04 16:30:00
+
+GENERATOR ACTIVATION (WITH INTERVAL TIME):
+-------------------------------------------
+🚨 Power Event Alert
+⚡ Generator Activated: Generator 1 (GEN1)
+📅 Power Cut Started: 2026-01-04 16:30:00
+🔄 Generator Started: 2026-01-04 16:32:15
+⏱️ INTERVAL TIME: 2 minutes 15 seconds (135 seconds)
+
+POWER RESTORED:
+---------------
+✅ POWER RESTORED
+EB Power: ON
+Restored at: 2026-01-04 16:45:30
+Outage Duration: 15 minutes 30 seconds
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                      FILE LOCATIONS                                       ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+Installation:        /opt/power-monitor/
+Configuration:       /opt/power-monitor/config.json
+WhatsApp Config:     /opt/power-monitor/.env
+Desktop Shortcut:    ~/Desktop/PowerMonitor.desktop
+Service File:        /etc/systemd/system/power-monitor.service
+Logs:                journalctl -u power-monitor
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                      TROUBLESHOOTING                                      ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+Service won't start:
+→ sudo journalctl -u power-monitor -xe
+
+MySQL connection failed:
+→ sudo python3 /opt/power-monitor/configure_mysql.py
+
+WhatsApp not working:
+→ Check .env file
+→ Verify Twilio credentials
+→ Check logs
+
+GPIO not reading:
+→ Check wiring
+→ Verify 3.3V signals
+→ Test: python3 -m src.gpio_reader
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                      SUPPORT                                              ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+Documentation:
+- FINAL_SOLUTION.txt (complete overview)
+- CUSTOMER_DEPLOYMENT_GUIDE.txt (detailed guide)
+- INSTALL.txt (installation guide)
+- GPIO_WIRING.txt (wiring diagrams)
+
+================================================================================
+

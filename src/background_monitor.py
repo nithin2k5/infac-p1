@@ -10,6 +10,7 @@ import threading
 from .config import Config
 from .gpio_reader import GPIOReader
 from .db_writer import DatabaseWriter
+from .whatsapp_sender import WhatsAppSender
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,13 @@ class BackgroundMonitor:
             debounce_time=0.1   # 100ms debounce
         )
         
+        # Initialize WhatsApp sender
+        self.whatsapp = WhatsAppSender()
+        
         # State tracking
         self.running = False
         self.start_time = None
+        self.eb_outage_start_time = None
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -117,11 +122,16 @@ class BackgroundMonitor:
             # Check for power outage (EB went OFF)
             if input_id == 'eb' and state == 0:
                 logger.warning("⚠️ POWER OUTAGE DETECTED - EB went OFF")
-                # You can add notification logic here (WhatsApp, email, etc.)
+                self._handle_power_outage(timestamp)
             
             # Check for power restoration (EB came back ON)
             elif input_id == 'eb' and state == 1:
                 logger.info("✓ POWER RESTORED - EB is back ON")
+                self._handle_power_restored(timestamp)
+            
+            # Check for generator activation
+            elif input_id in ['gen1', 'gen2'] and state == 1:
+                self._handle_generator_activation(input_id, timestamp)
             
         except Exception as e:
             logger.error(f"Error handling state change: {e}", exc_info=True)
@@ -194,13 +204,55 @@ class BackgroundMonitor:
         
         logger.info("Background monitor service stopped")
     
+    def _handle_power_outage(self, timestamp: float) -> None:
+        """Handle EB power outage."""
+        self.eb_outage_start_time = timestamp
+        logger.warning("Power outage recorded at timestamp: {}".format(timestamp))
+    
+    def _handle_power_restored(self, timestamp: float) -> None:
+        """Handle EB power restoration."""
+        if self.eb_outage_start_time:
+            duration = timestamp - self.eb_outage_start_time
+            logger.info(f"Power restored after {duration:.0f} seconds")
+            self.eb_outage_start_time = None
+    
+    def _handle_generator_activation(self, generator_id: str, timestamp: float) -> None:
+        """Handle generator activation and send WhatsApp notification."""
+        if not self.eb_outage_start_time:
+            # Generator turned on but no outage recorded
+            return
+        
+        # Calculate interval time (power cut to generator ON)
+        interval_seconds = timestamp - self.eb_outage_start_time
+        
+        generator_names = {
+            'gen1': 'Generator 1 (GEN1)',
+            'gen2': 'Generator 2 (GEN2)'
+        }
+        generator_name = generator_names.get(generator_id, generator_id.upper())
+        
+        logger.info(
+            f"{generator_name} activated {interval_seconds:.1f} seconds after power cut"
+        )
+        
+        # Send WhatsApp notification
+        try:
+            self.whatsapp.send_generator_activation_notification(
+                generator_name=generator_name,
+                outage_start_time=self.eb_outage_start_time,
+                generator_start_time=timestamp
+            )
+        except Exception as e:
+            logger.error(f"Failed to send WhatsApp notification: {e}")
+    
     def get_status(self) -> dict:
         """Get current service status."""
         return {
             'running': self.running,
             'start_time': self.start_time.isoformat() if self.start_time else None,
             'uptime': str(datetime.now() - self.start_time) if self.start_time else None,
-            'pin_config': self.gpio_reader.get_pin_config()
+            'pin_config': self.gpio_reader.get_pin_config(),
+            'whatsapp_enabled': self.whatsapp.enabled
         }
 
 

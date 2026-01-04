@@ -1,0 +1,371 @@
+================================================================================
+           POWER MONITOR - CUSTOMER DEPLOYMENT GUIDE
+================================================================================
+
+This guide explains how to create and deploy the customer package.
+
+================================================================================
+OVERVIEW
+================================================================================
+
+You have 3 main tasks:
+1. Build customer package (compiled, no source code)
+2. Deploy to customer's Raspberry Pi
+3. Customer configures MySQL easily
+
+================================================================================
+STEP 1: BUILD CUSTOMER PACKAGE
+================================================================================
+
+On your development machine (Mac):
+
+    cd /Users/nithinkumark/Developer/python/infac-p1
+    python3 build_customer_package.py
+
+This creates:
+    customer_package/power-monitor/
+
+What's included:
+    ✓ Compiled .pyc files (NO .py source code)
+    ✓ Automatic installer (install.sh)
+    ✓ MySQL configuration wizard
+    ✓ WhatsApp setup guide
+    ✓ Customer documentation
+    ✓ Configuration templates
+
+What's NOT included:
+    ✗ Source code (.py files)
+    ✗ Development files
+    ✗ Your credentials
+    ✗ Internal documentation
+
+================================================================================
+STEP 2: CREATE DISTRIBUTION ARCHIVE
+================================================================================
+
+    cd customer_package
+    tar -czf power-monitor-installer.tar.gz power-monitor/
+
+Send this file to your customer:
+    power-monitor-installer.tar.gz
+
+================================================================================
+STEP 3: CUSTOMER INSTALLATION
+================================================================================
+
+Customer receives: power-monitor-installer.tar.gz
+
+They do:
+
+1. Extract:
+   tar -xzf power-monitor-installer.tar.gz
+   cd power-monitor
+
+2. Install (ONE COMMAND):
+   sudo ./install.sh
+
+3. The installer automatically:
+   ✓ Installs all dependencies
+   ✓ Runs MySQL configuration wizard (interactive)
+   ✓ Installs 24/7 service
+   ✓ Creates desktop shortcut
+   ✓ Sets up everything
+
+4. Wire GPIO connections
+
+5. Done! Double-click desktop icon to open GUI
+
+================================================================================
+MYSQL CONFIGURATION (AUTOMATIC)
+================================================================================
+
+During installation, customer sees:
+
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║                                                               ║
+    ║              MySQL Configuration Wizard                       ║
+    ║                                                               ║
+    ╚═══════════════════════════════════════════════════════════════╝
+    
+    This wizard will help you configure MySQL for Power Monitor.
+    
+    Please enter your MySQL credentials:
+    
+    MySQL Host [localhost]: 
+    MySQL Port [3306]: 
+    MySQL User [root]: 
+    MySQL Password: ********
+    Database Name [ebpc]: 
+    
+    Testing connection...
+    ✓ Connection successful!
+    ✓ Configuration saved to /opt/power-monitor/config.json
+
+Customer just enters their MySQL password!
+Everything else is automatic.
+
+================================================================================
+WHATSAPP NOTIFICATIONS SETUP
+================================================================================
+
+Optional feature for customers who want notifications.
+
+Customer needs:
+1. Twilio account (free trial available)
+2. WhatsApp-enabled phone number from Twilio
+
+Setup steps for customer:
+
+1. Get Twilio credentials from https://www.twilio.com
+
+2. Create .env file:
+   sudo nano /opt/power-monitor/.env
+
+3. Add configuration:
+   WHATSAPP_ENABLED=true
+   WHATSAPP_PROVIDER=twilio
+   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_AUTH_TOKEN=your_auth_token_here
+   TWILIO_FROM_NUMBER=whatsapp:+14155238886
+   TWILIO_TO_NUMBER=whatsapp:+919876543210
+   WHATSAPP_RATE_LIMIT_SECONDS=300
+
+4. Restart service:
+   sudo systemctl restart power-monitor
+
+5. Test notification:
+   python3 /opt/power-monitor/test_whatsapp.py
+
+Notifications will be sent when:
+- EB power goes OFF
+- Generator turns ON (with interval time)
+- Power is restored
+
+Message format:
+    🚨 Power Event Alert
+    
+    ⚡ Generator Activated: Generator 1 (GEN1)
+    
+    📅 Power Cut Started:
+       2026-01-04 16:30:00
+    
+    🔄 Generator Started:
+       2026-01-04 16:32:15
+    
+    ⏱️ INTERVAL TIME (Power Cut → Generator ON):
+       2 minutes 15 seconds
+       (135 seconds)
+    
+    Status: Generator is now active
+
+================================================================================
+WHAT CUSTOMER GETS
+================================================================================
+
+INSTALLED LOCATION:
+-------------------
+/opt/power-monitor/
+
+DESKTOP SHORTCUT:
+-----------------
+~/Desktop/PowerMonitor.desktop
+(Double-click to open GUI)
+
+MENU ENTRY:
+-----------
+Menu → Accessories → Power Monitor
+
+BACKGROUND SERVICE:
+-------------------
+Service name: power-monitor
+Auto-starts on boot: Yes
+Runs 24/7: Yes
+
+FEATURES:
+---------
+✓ Real-time GPIO monitoring
+✓ MySQL database recording
+✓ Desktop GUI with graphs
+✓ WhatsApp notifications (optional)
+✓ Event reports and CSV export
+✓ Power outage detection
+✓ Automatic service restart
+
+================================================================================
+CUSTOMER MANAGEMENT COMMANDS
+================================================================================
+
+Check service status:
+    sudo systemctl status power-monitor
+
+View live logs:
+    sudo journalctl -u power-monitor -f
+
+Restart service:
+    sudo systemctl restart power-monitor
+
+Stop service:
+    sudo systemctl stop power-monitor
+
+Start service:
+    sudo systemctl start power-monitor
+
+Open GUI:
+    Double-click desktop icon
+    OR run: python3 /opt/power-monitor/src/main.pyc
+
+Access database:
+    mysql -u root -p ebpc
+
+Reconfigure MySQL:
+    sudo python3 /opt/power-monitor/configure_mysql.py
+
+================================================================================
+SUPPORT FOR CUSTOMERS
+================================================================================
+
+Provide customers with:
+
+1. Installation guide (included in package)
+2. GPIO wiring diagrams (included)
+3. WhatsApp setup guide (included)
+4. Your contact information
+5. Support email/phone
+
+Common customer questions:
+
+Q: How do I change MySQL password?
+A: Run: sudo python3 /opt/power-monitor/configure_mysql.py
+
+Q: How do I enable WhatsApp notifications?
+A: See WHATSAPP NOTIFICATIONS SETUP section above
+
+Q: How do I check if it's working?
+A: Run: sudo systemctl status power-monitor
+   Should show: Active: active (running)
+
+Q: Where are the logs?
+A: Run: sudo journalctl -u power-monitor -f
+
+Q: How do I open the GUI?
+A: Double-click "Power Monitor" icon on desktop
+
+================================================================================
+SECURITY NOTES
+================================================================================
+
+✓ Source code is compiled to bytecode (.pyc)
+✓ Original .py files NOT included
+✓ Customer cannot easily read your code
+✓ Customer cannot modify core logic
+✓ Professional distribution
+
+Customer CAN:
+- Install and use the software
+- Configure MySQL credentials
+- Set up WhatsApp notifications
+- View their own data
+- Use all features
+
+Customer CANNOT:
+- See your source code
+- Modify core functionality
+- Copy your algorithms
+- Redistribute easily
+
+================================================================================
+UPDATING CUSTOMER INSTALLATIONS
+================================================================================
+
+When you release an update:
+
+1. Build new package:
+   python3 build_customer_package.py
+
+2. Create new archive:
+   tar -czf power-monitor-v1.1.tar.gz -C customer_package power-monitor/
+
+3. Send to customer with update instructions:
+   
+   a. Stop service:
+      sudo systemctl stop power-monitor
+   
+   b. Backup config:
+      sudo cp /opt/power-monitor/config.json ~/config.backup
+      sudo cp /opt/power-monitor/.env ~/env.backup (if exists)
+   
+   c. Extract new version:
+      tar -xzf power-monitor-v1.1.tar.gz
+      cd power-monitor
+   
+   d. Run installer:
+      sudo ./install.sh
+   
+   e. Restore config:
+      sudo cp ~/config.backup /opt/power-monitor/config.json
+      sudo cp ~/env.backup /opt/power-monitor/.env (if exists)
+   
+   f. Restart service:
+      sudo systemctl restart power-monitor
+
+================================================================================
+TESTING BEFORE DEPLOYMENT
+================================================================================
+
+Before sending to customer:
+
+1. Build package:
+   python3 build_customer_package.py
+
+2. Test on clean Raspberry Pi:
+   - Copy package to test Pi
+   - Run installer
+   - Verify service starts
+   - Test GUI opens
+   - Test GPIO reading
+   - Test WhatsApp (if enabled)
+
+3. Verify no source code visible:
+   ls /opt/power-monitor/src/
+   (Should only see .pyc files, no .py files)
+
+4. Test customer workflow:
+   - Follow customer installation steps
+   - Ensure MySQL wizard works
+   - Check documentation clarity
+
+================================================================================
+SUMMARY
+================================================================================
+
+FOR YOU (Developer):
+--------------------
+1. Run: python3 build_customer_package.py
+2. Create: tar -czf power-monitor-installer.tar.gz -C customer_package power-monitor/
+3. Send: power-monitor-installer.tar.gz to customer
+
+FOR CUSTOMER:
+-------------
+1. Extract: tar -xzf power-monitor-installer.tar.gz
+2. Install: cd power-monitor && sudo ./install.sh
+3. Wire GPIO connections
+4. Use: Double-click desktop icon
+
+MYSQL CONFIGURATION:
+--------------------
+Automatic during installation via interactive wizard.
+Customer just enters password, everything else is automatic.
+
+WHATSAPP NOTIFICATIONS:
+-----------------------
+Optional. Customer creates .env file with Twilio credentials.
+Sends notifications for power outages and generator activation.
+
+Your source code is protected!
+Customer gets working software!
+Everyone is happy!
+
+================================================================================
+END OF CUSTOMER DEPLOYMENT GUIDE
+================================================================================
+

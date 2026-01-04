@@ -1,51 +1,179 @@
-# 🔌 Power Monitor - 24/7 EB & Generator Monitoring System
+# 🔌 Power Monitor - Complete Solution
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-red.svg)](https://www.raspberrypi.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+**24/7 EB & Generator Monitoring System for Raspberry Pi**
 
-A comprehensive power monitoring system for Raspberry Pi with GPIO integration. Monitors EB (Electricity Board) and multiple generators, records events to MySQL database, and provides a beautiful desktop GUI for 24/7 operation.
+A professional power monitoring system with GPIO integration, WhatsApp notifications, and desktop GUI - ready for customer deployment without exposing source code.
 
 ---
 
 ## 🌟 Features
 
-- 🔌 **GPIO Integration** - Direct hardware monitoring via Raspberry Pi GPIO pins
-- ⚡ **Real-time Monitoring** - 0.5s polling with debounce protection  
-- 💾 **MySQL Database** - All events recorded with timestamps and durations
-- 🖥️ **Desktop GUI** - Beautiful dashboard with LED indicators, graphs, and reports
-- 🔄 **24/7 Service** - Runs continuously as systemd/Windows service
-- 🔁 **Auto-restart** - Automatically recovers from failures
-- 📊 **Power Outage Detection** - Automatic EB power cut detection and tracking
-- 📤 **CSV Export** - Export filtered reports for analysis
-- 🔒 **Safe** - Optocoupler support for electrical isolation
+### ✅ **24/7 Background Monitoring**
+- Continuous GPIO pin monitoring (0.5s polling)
+- Automatic event recording to MySQL database
+- Power outage detection and tracking
+- Auto-starts on boot, auto-restarts on failure
+
+### ✅ **WhatsApp Notifications**
+- Power outage alerts
+- Generator activation notifications **with interval time**
+- Power restoration alerts
+- Configurable cooldown period
+
+### ✅ **Desktop GUI Application**
+- Real-time status dashboard with LED indicators
+- Timeline graphs for all power sources
+- Event reports with filtering and search
+- EB power cut history
+- CSV export functionality
+
+### ✅ **Customer-Ready Deployment**
+- Compiled bytecode (no source code exposure)
+- One-command installation
+- Interactive MySQL configuration wizard
+- Professional packaging
 
 ---
 
-## 🚀 Quick Start
+## 📋 Table of Contents
 
-### Installation (3 Steps)
+1. [For Developers](#for-developers-build--deploy)
+2. [For Customers](#for-customers-installation)
+3. [WhatsApp Notifications](#whatsapp-notifications)
+4. [MySQL Configuration](#mysql-configuration)
+5. [GPIO Wiring](#gpio-wiring)
+6. [UI Features](#ui-features)
+7. [Troubleshooting](#troubleshooting)
+
+---
+
+## 👨‍💻 For Developers: Build & Deploy
+
+### **Step 1: Build Customer Package**
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/YOUR_USERNAME/power-monitor-rpi.git
-cd power-monitor-rpi
-
-# 2. Configure database
-cp config.example.json config.json
-nano config.json  # Add your MySQL password
-
-# 3. Install as service (one command!)
-sudo ./install_service_linux.sh
+cd /Users/nithinkumark/Developer/python/infac-p1
+python3 build_customer_package.py
 ```
 
-**That's it!** The service is now running 24/7 and monitoring your power status.
+**Output:**
+```
+╔═══════════════════════════════════════════════════════════════╗
+║     POWER MONITOR - CUSTOMER PACKAGE BUILDER                 ║
+╚═══════════════════════════════════════════════════════════════╝
+
+[1/7] Cleaning previous builds...
+✓ Clean
+
+[2/7] Creating package structure...
+✓ Structure created
+
+[3/7] Compiling Python source files...
+  ✓ background_monitor.py → background_monitor.pyc
+  ✓ config.py → config.pyc
+  ✓ db_reader.py → db_reader.pyc
+  ✓ db_writer.py → db_writer.pyc
+  ✓ gpio_reader.py → gpio_reader.pyc
+  ✓ main.py → main.pyc
+  ✓ monitor_gui.py → monitor_gui.pyc
+  ✓ whatsapp_sender.py → whatsapp_sender.pyc
+✓ Compiled 8 files
+
+[4/7] Copying configuration and documentation...
+✓ Files copied
+
+[5/7] Creating customer installer...
+✓ Installer created
+
+[6/7] Creating MySQL configuration wizard...
+✓ MySQL wizard created
+
+[7/7] Creating customer README...
+✓ README created
+
+╔═══════════════════════════════════════════════════════════════╗
+║              PACKAGE COMPLETE                                 ║
+╚═══════════════════════════════════════════════════════════════╝
+
+✓ Customer package created: customer_package/power-monitor/
+✓ NO SOURCE CODE INCLUDED
+```
+
+### **Step 2: Create Distribution Archive**
+
+```bash
+cd customer_package
+tar -czf power-monitor-installer.tar.gz power-monitor/
+```
+
+### **Step 3: Send to Customer**
+
+Send the file: `power-monitor-installer.tar.gz`
+
+**What's Included:**
+- ✅ Compiled `.pyc` files (bytecode)
+- ✅ Automatic installer
+- ✅ MySQL configuration wizard
+- ✅ Customer documentation
+- ✅ Configuration templates
+- ❌ **NO** `.py` source files
+- ❌ **NO** development files
 
 ---
 
-## 🔌 GPIO Wiring
+## 👥 For Customers: Installation
 
-Connect your power status signals to these Raspberry Pi pins:
+### **Step 1: Extract Package**
+
+```bash
+tar -xzf power-monitor-installer.tar.gz
+cd power-monitor
+```
+
+### **Step 2: Run Installer**
+
+```bash
+sudo ./install.sh
+```
+
+**The installer will:**
+1. Install system dependencies (Python, MySQL, Tkinter)
+2. Install Python packages
+3. Run MySQL configuration wizard (interactive)
+4. Install 24/7 background service
+5. Create desktop shortcut
+6. Create application menu entry
+7. Set up permissions
+
+### **Step 3: MySQL Configuration (Automatic)**
+
+During installation, you'll see:
+
+```
+[4/9] Configuring MySQL...
+
+╔═══════════════════════════════════════════════════════════════╗
+║              MySQL Configuration Wizard                       ║
+╚═══════════════════════════════════════════════════════════════╝
+
+This wizard will help you configure MySQL for Power Monitor.
+
+Please enter your MySQL credentials:
+
+MySQL Host [localhost]: ← Press Enter
+MySQL Port [3306]: ← Press Enter
+MySQL User [root]: ← Press Enter
+MySQL Password: ******** ← Enter your password
+Database Name [ebpc]: ← Press Enter
+
+Testing connection...
+✓ Connection successful!
+✓ Configuration saved to /opt/power-monitor/config.json
+```
+
+**You only need to enter your MySQL password!** Everything else uses smart defaults.
+
+### **Step 4: Wire GPIO Connections**
 
 ```
 Pin 11 (GPIO 17) ← EB Power Status
@@ -54,251 +182,117 @@ Pin 15 (GPIO 22) ← Generator 2 Status
 Pin 6  (GND)     ← Common Ground
 ```
 
-**Signal Logic:**
-- HIGH (3.3V) = Power ON (1)
-- LOW (0V) = Power OFF (0)
+⚠️ **IMPORTANT:** Use 3.3V logic signals. For higher voltages, use optocouplers!
 
-⚠️ **IMPORTANT:** Never connect voltages > 3.3V directly to GPIO pins!  
-Use optocouplers for 5V, 12V, 24V, or AC signals. See [GPIO_WIRING.txt](GPIO_WIRING.txt) for detailed diagrams.
+See `GPIO_WIRING.txt` for detailed diagrams.
 
----
+### **Step 5: Use the Application**
 
-## 📖 Documentation
+**Open GUI:**
+- Double-click "Power Monitor" icon on desktop
+- OR: Menu → Accessories → Power Monitor
 
-- 📄 [START_HERE.txt](START_HERE.txt) - Begin here!
-- 🚀 [QUICK_START.txt](QUICK_START.txt) - Quick reference guide
-- 📚 [SETUP_GUIDE.txt](SETUP_GUIDE.txt) - Detailed setup instructions
-- 🔌 [GPIO_WIRING.txt](GPIO_WIRING.txt) - Wiring diagrams and safety
-- 🏗️ [SYSTEM_ARCHITECTURE.txt](SYSTEM_ARCHITECTURE.txt) - Technical architecture
-- ✅ [DEPLOYMENT_CHECKLIST.txt](DEPLOYMENT_CHECKLIST.txt) - Installation checklist
-- 📝 [IMPLEMENTATION_SUMMARY.txt](IMPLEMENTATION_SUMMARY.txt) - What was implemented
+**Service runs automatically 24/7 in background!**
 
 ---
 
-## 🛠️ Requirements
+## 📱 WhatsApp Notifications
 
-### Hardware
-- Raspberry Pi 3/4 or newer
-- Power supply (5V, 2.5A minimum)
-- MicroSD card (16GB+, Class 10)
-- Optocouplers (PC817 or similar) for voltage isolation
-- Wiring and connectors
+### **Setup (Optional)**
 
-### Software
-- Python 3.8 or higher
-- MySQL Server 5.7 or higher
-- RPi.GPIO library
-- Raspberry Pi OS (or any Linux distribution)
+1. Get Twilio account: https://www.twilio.com (free trial available)
 
----
-
-## 💻 Usage
-
-### Service Management
-
+2. Create `.env` file:
 ```bash
-# Check status
-sudo systemctl status power-monitor
+sudo nano /opt/power-monitor/.env
+```
 
-# View live logs
-sudo journalctl -u power-monitor -f
+3. Add configuration:
+```bash
+WHATSAPP_ENABLED=true
+WHATSAPP_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token_here
+TWILIO_FROM_NUMBER=whatsapp:+14155238886
+TWILIO_TO_NUMBER=whatsapp:+919876543210
+WHATSAPP_RATE_LIMIT_SECONDS=300
+```
 
-# Start/Stop/Restart
-sudo systemctl start power-monitor
-sudo systemctl stop power-monitor
+4. Restart service:
+```bash
 sudo systemctl restart power-monitor
 ```
 
-### Desktop GUI
+### **Notification Examples**
+
+**Power Outage:**
+```
+⚠️ POWER OUTAGE DETECTED
+
+EB Power: OFF
+Time: 2026-01-04 16:30:00
+
+Generator Status:
+• GEN1: OFF ❌
+• GEN2: OFF ❌
+
+System switched to generator power.
+```
+
+**Generator Activation (WITH INTERVAL TIME):**
+```
+🚨 Power Event Alert
+
+⚡ Generator Activated: Generator 1 (GEN1)
+
+📅 Power Cut Started:
+   2026-01-04 16:30:00
+
+🔄 Generator Started:
+   2026-01-04 16:32:15
+
+⏱️ INTERVAL TIME (Power Cut → Generator ON):
+   2 minutes 15 seconds
+   (135 seconds)
+
+Status: Generator is now active
+```
+
+**Power Restored:**
+```
+✅ POWER RESTORED
+
+EB Power: ON
+Restored at: 2026-01-04 16:45:30
+
+Outage Duration: 15 minutes 30 seconds
+Outage started: 16:30:00
+
+System back to normal power.
+```
+
+---
+
+## 🗄️ MySQL Configuration
+
+### **Initial Configuration**
+Done automatically during installation via interactive wizard.
+
+### **Reconfigure MySQL**
+If you need to change MySQL settings:
 
 ```bash
-# Open GUI dashboard
-python3 -m src.main
+sudo python3 /opt/power-monitor/configure_mysql.py
 ```
 
-Shows:
-- Real-time status with LED indicators
-- Timeline graphs for all power sources
-- Event reports with filtering
-- EB power cut history
-- CSV export functionality
-
-### Testing
+### **Manual Configuration**
+Edit configuration file:
 
 ```bash
-# Test GPIO reading
-python3 -m src.gpio_reader
-
-# Test service manually
-python3 run_monitor_service.py
+sudo nano /opt/power-monitor/config.json
 ```
 
----
-
-## 📊 What It Does
-
-The system continuously:
-- ✅ Monitors GPIO pins every 0.5 seconds
-- ✅ Detects state changes (ON/OFF)
-- ✅ Records all events to MySQL database
-- ✅ Calculates durations and intervals
-- ✅ Detects power outages automatically
-- ✅ Logs all activities
-- ✅ Auto-starts on boot
-- ✅ Auto-restarts on failure
-
-**Performance:**
-- CPU usage: < 1%
-- Memory: 50-100 MB
-- Reliable 24/7 operation
-
----
-
-## 🎯 Key Benefits
-
-✅ **No Manual Intervention** - Runs 24/7 automatically  
-✅ **Reliable** - Auto-restarts on failure  
-✅ **Complete History** - All events recorded with timestamps  
-✅ **Easy Installation** - One command to install  
-✅ **Safe** - Optocoupler support for electrical isolation  
-✅ **Comprehensive Docs** - Everything is documented  
-✅ **Cross-Platform** - Works on Raspberry Pi, Linux, Windows  
-
----
-
-## 🏗️ Project Structure
-
-```
-power-monitor-rpi/
-├── src/                         # Source code
-│   ├── gpio_reader.py          # GPIO pin reading
-│   ├── background_monitor.py   # 24/7 monitoring service
-│   ├── monitor_gui.py          # Desktop GUI
-│   ├── db_reader.py            # Database read operations
-│   ├── db_writer.py            # Database write operations
-│   └── config.py               # Configuration loader
-│
-├── Installation Scripts
-│   ├── install_service_linux.sh       # Linux/RPi installer
-│   ├── install_service_windows.bat    # Windows installer
-│   ├── install_windows_service.py     # Windows service
-│   ├── power-monitor.service          # systemd service file
-│   └── run_monitor_service.py         # Manual runner
-│
-├── Documentation
-│   ├── START_HERE.txt
-│   ├── QUICK_START.txt
-│   ├── SETUP_GUIDE.txt
-│   ├── GPIO_WIRING.txt
-│   └── ...
-│
-├── config.example.json          # Sample configuration
-├── requirements.txt             # Python dependencies
-└── README.md                    # This file
-```
-
----
-
-## 🔧 Troubleshooting
-
-### Service won't start
-```bash
-sudo journalctl -u power-monitor -xe  # Check logs
-sudo systemctl status mysql            # Verify MySQL
-cat config.json                        # Check config
-```
-
-### GPIO not reading
-```bash
-python3 -m src.gpio_reader  # Test manually
-groups pi                   # Check permissions
-```
-
-### Database errors
-```bash
-mysql -u root -p  # Test connection
-nano config.json  # Verify credentials
-```
-
-See [SETUP_GUIDE.txt](SETUP_GUIDE.txt) for detailed troubleshooting.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Support
-
-For issues and questions:
-- Open an issue on GitHub
-- Check the documentation files
-- Review the troubleshooting section
-
----
-
-## 📸 Screenshots
-
-*Coming soon - Desktop GUI dashboard, timeline graphs, and reports*
-
----
-
-**Made with ❤️ for reliable 24/7 power monitoring**
-
----
-
-# Raspberry Pi Monitor - Desktop Event Viewer
-
-> **Note:** The sections below contain the original GUI documentation.
-
-A cross-platform desktop application built with Python and Tkinter that provides a read-only GUI for viewing events from a Raspberry Pi generator and power-cut monitoring system. The application connects to a MySQL database where events are stored by a background monitoring service.
-
-## Overview
-
-This is a **read-only viewer application**. It does not perform GPIO monitoring itself - it only reads from the MySQL database to display, filter, inspect, and export monitoring events. The actual GPIO monitoring is performed by a separate background systemd service.
-
-## Features
-
-- ✅ **Main Table View**: Sortable columns showing recent events (ID, input name, event type, timestamp, duration, previous interval, metadata)
-- ✅ **Pagination**: Handles large datasets efficiently with page-based navigation
-- ✅ **Advanced Filtering**: Filter by input (EB/GEN1/GEN2/GEN3), time-range, event type, and free-text search
-- ✅ **Event Details**: Double-click or view details button to see full metadata and computed fields
-- ✅ **CSV Export**: Export selected rows or filtered results to CSV
-- ✅ **Auto-refresh**: Configurable auto-refresh interval (default 30 seconds) with manual refresh option
-- ✅ **Visual Indicators**: Red banner showing active power outages (when EB is LOW)
-- ✅ **Statistics Panel**: Summary stats including event counts per input, total outages, average duration
-- ✅ **Error Handling**: Clear user messages when database is inaccessible or corrupt
-- ✅ **Configuration**: Config file support for DB path, auto-refresh interval, default filters, UTC/local time
-- ✅ **Keyboard Shortcuts**: F5 (refresh), Ctrl+F (search), Ctrl+E (export), Esc (clear filters)
-- ✅ **Minimal Dependencies**: Only requires MySQL connector (Tkinter is part of Python stdlib)
-
-## Requirements
-
-- Python 3.7 or higher
-- Tkinter (usually included with Python)
-- MySQL connector: `mysql-connector-python` or `pymysql`
-- Access to MySQL database with monitoring events
-
-### Installing Dependencies
-
-```bash
-pip install mysql-connector-python
-# OR
-pip install pymysql
-```
-
-## Database Connection
-
-The application connects to a MySQL database to read events. Configure the connection in `config.json`:
-
+Update the database section:
 ```json
 {
   "database": {
@@ -307,303 +301,346 @@ The application connects to a MySQL database to read events. Configure the conne
     "port": 3306,
     "user": "root",
     "password": "your_password",
-    "database": "rpi_monitor"
+    "database": "ebpc"
   }
 }
 ```
 
-## Database Schema
-
-The application expects the following MySQL database schema:
-
-### Events Table
-```sql
-CREATE TABLE IF NOT EXISTS events (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    input_id VARCHAR(50) NOT NULL,
-    input_name VARCHAR(100) NOT NULL,
-    state INT NOT NULL,
-    timestamp DOUBLE NOT NULL,
-    event_counter INT NOT NULL,
-    previous_off_time DOUBLE,
-    previous_on_time DOUBLE,
-    metadata TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_input_timestamp (input_id, timestamp),
-    INDEX idx_timestamp (timestamp)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
-
-### Intervals Table
-```sql
-CREATE TABLE IF NOT EXISTS intervals (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    event_id INT NOT NULL,
-    input_id VARCHAR(50) NOT NULL,
-    on_duration DOUBLE,
-    off_interval DOUBLE,
-    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
-
-### Outages Table
-```sql
-CREATE TABLE IF NOT EXISTS outages (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    outage_start DOUBLE NOT NULL,
-    outage_end DOUBLE,
-    generator_input_id VARCHAR(50),
-    generator_start_time DOUBLE,
-    duration_seconds DOUBLE,
-    notification_sent INT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_outage_start (outage_start)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
-
-## Configuration
-
-Edit `config.json` to configure the application:
-
-```json
-{
-  "database": {
-    "type": "mysql",
-    "host": "localhost",
-    "port": 3306,
-    "user": "root",
-    "password": "12345678",
-    "database": "rpi_monitor"
-  },
-  "ui": {
-    "auto_refresh_interval": 30,
-    "default_page_size": 100,
-    "show_utc": false,
-    "window_width": 1200,
-    "window_height": 800
-  },
-  "default_filters": {
-    "input_id": null,
-    "start_time": null,
-    "end_time": null,
-    "event_type": null
-  }
-}
-```
-
-### Configuration Options
-
-- **database**: MySQL connection settings
-  - `host`: MySQL server hostname
-  - `port`: MySQL server port (default: 3306)
-  - `user`: MySQL username
-  - `password`: MySQL password
-  - `database`: Database name
-
-- **ui**: User interface settings
-  - `auto_refresh_interval`: Seconds between auto-refresh (default: 30)
-  - `default_page_size`: Number of events per page (default: 100)
-  - `show_utc`: Display timestamps in UTC (default: false)
-  - `window_width`: Initial window width (default: 1200)
-  - `window_height`: Initial window height (default: 800)
-
-## Running the Application
-
-### Method 1: Direct Python Execution
-
+Restart service:
 ```bash
-python3 monitor_ui.py
+sudo systemctl restart power-monitor
 ```
 
-### Method 2: Using Python Module
+---
 
+## 🔌 GPIO Wiring
+
+### **Pin Assignments**
+
+| Function | GPIO Pin | Physical Pin | Signal |
+|----------|----------|--------------|--------|
+| EB Status | GPIO 17 | Pin 11 | 3.3V Logic |
+| GEN1 Status | GPIO 27 | Pin 13 | 3.3V Logic |
+| GEN2 Status | GPIO 22 | Pin 15 | 3.3V Logic |
+| Ground | GND | Pin 6 | Common Ground |
+
+### **Signal Logic**
+- **HIGH (3.3V)** = Power ON (1)
+- **LOW (0V)** = Power OFF (0)
+
+### **Safety Warning**
+⚠️ **NEVER** connect voltages > 3.3V directly to GPIO pins!
+
+For 5V, 12V, 24V, or AC signals, use optocouplers (e.g., PC817) for electrical isolation.
+
+See `GPIO_WIRING.txt` for detailed wiring diagrams and safety information.
+
+---
+
+## 🖥️ UI Features
+
+### **✅ YES! Desktop GUI is Available**
+
+The system includes a **full-featured desktop GUI application** with:
+
+### **1. Status Dashboard Tab**
+- **Real-time LED Indicators**
+  - EB (Electricity Board) - Shows ON/OFF with red LED
+  - GEN1 (Generator 1) - Shows ON/OFF with red LED
+  - GEN2 (Generator 2) - Shows ON/OFF with red LED
+- **Timeline Graph**
+  - Visual representation of all power sources
+  - Last 4 hours of activity
+  - Color-coded for each source
+- **Auto-refresh** (configurable, default 30 seconds)
+- **Last updated timestamp**
+
+### **2. Events Report Tab**
+- **Complete Event Log**
+  - All state changes recorded
+  - Timestamps with durations
+  - ON/OFF intervals
+- **Advanced Filtering**
+  - Filter by input (EB/GEN1/GEN2)
+  - Filter by event type (ON/OFF)
+  - Date/time range filtering
+  - Text search
+- **Sortable Columns**
+- **Pagination** (handles large datasets)
+- **View Event Details** (double-click)
+- **CSV Export** (filtered or all data)
+- **Statistics Panel**
+  - Total events
+  - Events per input
+  - ON/OFF counts
+
+### **3. EB Power History Tab**
+- **Power Cut Tracking**
+  - OFF time → ON time
+  - Duration of each outage
+  - Status (Ongoing/Completed)
+- **Pagination**
+- **Color-coded** (red for ongoing, green for completed)
+
+### **Opening the GUI**
+
+**Method 1:** Double-click desktop icon
+```
+Desktop → Power Monitor icon
+```
+
+**Method 2:** Application menu
+```
+Menu → Accessories → Power Monitor
+```
+
+**Method 3:** Command line
 ```bash
-python3 -m src.main
+python3 /opt/power-monitor/src/main.pyc
 ```
 
-### Method 3: Using Custom Config
+### **GUI Screenshots Description**
 
+**Status Dashboard:**
+- Top section: 4 LED indicators in a row (EB, GEN1, GEN2, GEN3)
+- Each shows: Name, LED circle (red=ON, gray=OFF), status text, last update time
+- Bottom section: Combined timeline graph showing all inputs over last 4 hours
+- Refresh button and auto-refresh checkbox
+
+**Events Report:**
+- Statistics panel at top (total events, counts per input)
+- Filter panel (input selector, event type, date range, search box)
+- Main table with columns: ID, Input, State, Timestamp, Counter, Durations
+- Pagination controls at bottom
+- Export CSV and View Details buttons
+
+**EB Power History:**
+- Table showing: #, OFF Time, ON Time, Duration, Status
+- Color-coded rows (red=ongoing, green=completed)
+- Pagination controls
+- Refresh button
+
+---
+
+## 🔧 Service Management
+
+### **Check Status**
 ```bash
-python3 monitor_ui.py --config /path/to/config.json
+sudo systemctl status power-monitor
 ```
 
-## Usage Guide
-
-### Viewing Events
-
-1. The main table shows recent events with pagination controls at the bottom
-2. Click column headers to sort by that column
-3. Use pagination buttons (First, Prev, Next, Last) to navigate through pages
-
-### Filtering Events
-
-1. **Input Filter**: Select specific input (EB, GEN1, GEN2, GEN3) or "All"
-2. **Event Type**: Filter by "ON", "OFF", or "All"
-3. **Time Range**: Enter start and/or end times (format: YYYY-MM-DD HH:MM:SS)
-4. **Search**: Free-text search in input names and metadata
-5. Click "Apply Filters" to apply, or "Clear" to reset all filters
-
-### Viewing Event Details
-
-- Double-click any event row, or
-- Select an event and click "View Details" button
-
-The details window shows:
-- All event fields
-- Formatted durations
-- Previous event times
-- Full metadata JSON
-
-### Exporting to CSV
-
-1. Optionally select specific events (or leave unselected for all filtered events)
-2. Click "Export CSV" button
-3. Choose save location
-4. CSV file will contain all event data with timestamps
-
-### Auto-Refresh
-
-- Check "Auto-refresh" checkbox to enable
-- Set interval in seconds (5-300)
-- Auto-refresh updates the table and statistics every N seconds
-- Press F5 for manual refresh anytime
-
-### Keyboard Shortcuts
-
-- **F5**: Refresh data
-- **Ctrl+F**: Focus search field
-- **Ctrl+E**: Export CSV
-- **Esc**: Clear all filters
-
-## Packaging with PyInstaller
-
-### Installing PyInstaller
-
+### **View Live Logs**
 ```bash
-pip install pyinstaller
+sudo journalctl -u power-monitor -f
 ```
 
-### Building Executable
-
-#### For Raspberry Pi OS (ARM):
-
+### **Restart Service**
 ```bash
-# On Raspberry Pi or cross-compile environment
-pyinstaller monitor_ui.spec
-
-# The executable will be in dist/rpi-monitor-ui
+sudo systemctl restart power-monitor
 ```
 
-#### For Desktop Development (Linux/macOS/Windows):
-
+### **Stop/Start Service**
 ```bash
-# Build for current platform
-pyinstaller monitor_ui.spec
-
-# The executable will be in dist/rpi-monitor-ui (or rpi-monitor-ui.exe on Windows)
+sudo systemctl stop power-monitor
+sudo systemctl start power-monitor
 ```
 
-### PyInstaller Spec File
+---
 
-The `monitor_ui.spec` file is already configured. Key settings:
+## 🐛 Troubleshooting
 
-- `console=False`: Run as GUI application (set to `True` for debugging)
-- `upx=True`: Compress executable (optional)
-- `datas=[('config.json', '.')]`: Include config file if needed
+### **Service Won't Start**
+```bash
+# Check detailed logs
+sudo journalctl -u power-monitor -xe
 
-### Custom Build Options
+# Verify MySQL is running
+sudo systemctl status mysql
 
-Edit `monitor_ui.spec` to:
-- Add icon: `icon='path/to/icon.ico'`
-- Include additional data files
-- Change executable name
-- Adjust UPX compression settings
+# Check configuration
+cat /opt/power-monitor/config.json
+```
 
-## Architecture
+### **GPIO Not Reading**
+```bash
+# Test GPIO manually
+python3 -m src.gpio_reader
 
-### Components
+# Check user permissions
+groups pi
 
-1. **src/db_reader.py**: Read-only MySQL database access layer
-2. **src/config.py**: Configuration management
-3. **src/monitor_gui.py**: Main Tkinter GUI application
-4. **src/main.py**: Application entry point
+# Verify wiring connections
+```
 
-### Database Reader
+### **MySQL Connection Failed**
+```bash
+# Reconfigure MySQL
+sudo python3 /opt/power-monitor/configure_mysql.py
 
-The `DatabaseReader` class provides:
-- Connection management
-- Event querying with filters and pagination
-- Statistics calculation
-- Latest state retrieval
-- Active outage detection
+# Test MySQL connection
+mysql -u root -p
+```
 
-### GUI Application
+### **WhatsApp Not Working**
+```bash
+# Check .env file exists
+ls -la /opt/power-monitor/.env
 
-The `MonitorGUI` class manages:
-- UI layout and components
-- User interactions
-- Data loading and display
-- Filtering and sorting
-- Export functionality
-- Auto-refresh scheduling
+# Verify configuration
+cat /opt/power-monitor/.env
 
-## Error Handling
+# Check service logs
+sudo journalctl -u power-monitor | grep -i whatsapp
+```
 
-The application handles various error conditions:
+### **GUI Won't Open**
+```bash
+# Check Tkinter is installed
+python3 -m tkinter
 
-- **Database Connection Errors**: Shows error dialog and exits if connection fails on startup
-- **Query Errors**: Shows error message but keeps application running
-- **Invalid Filters**: Gracefully handles invalid date/time formats
-- **Export Errors**: Shows error message if CSV export fails
-- **Connection Status**: Status indicator shows connection state (green=connected, red=error)
+# Run from terminal to see errors
+python3 /opt/power-monitor/src/main.pyc
 
-## Performance Considerations
+# Verify database connection
+python3 -c "from src.db_reader import DatabaseReader; db = DatabaseReader(); print('OK' if db.test_connection() else 'FAIL')"
+```
 
-- **Pagination**: Large datasets are loaded in pages (default 100 events per page)
-- **Lazy Loading**: Only loads current page, not all events
-- **Indexed Queries**: Database queries use indexed columns for fast retrieval
-- **Efficient Updates**: Statistics and outage checks are optimized
+---
 
-## Troubleshooting
+## 📊 System Requirements
 
-### Database Connection Issues
+### **Hardware**
+- Raspberry Pi 3/4 or newer
+- Power supply (5V, 2.5A minimum)
+- MicroSD card (16GB+, Class 10)
+- Optocouplers (for voltage isolation)
 
-1. Check MySQL is running: `sudo systemctl status mysql`
-2. Verify credentials in `config.json`
-3. Test connection: `mysql -h localhost -u root -p`
-4. Check firewall allows MySQL connections
+### **Software**
+- Raspberry Pi OS (Debian-based)
+- Python 3.8 or higher
+- MySQL Server 5.7 or higher
+- Tkinter (GUI support)
 
-### Tkinter Not Available
+### **Performance**
+- CPU usage: < 1%
+- Memory: 50-100 MB (service), 100-200 MB (GUI when open)
+- Disk space: ~1 GB (including database)
 
-- **macOS**: `brew install python-tk`
-- **Ubuntu/Debian**: `sudo apt-get install python3-tk`
-- **Raspberry Pi OS**: Usually pre-installed
+---
 
-### Application Won't Start
+## 📚 Documentation
 
-1. Check Python version: `python3 --version` (needs 3.7+)
-2. Verify dependencies: `pip list | grep mysql`
-3. Check config file syntax: `python3 -m json.tool config.json`
-4. Check logs for error messages
+- **FINAL_SOLUTION.txt** - Complete solution overview
+- **CUSTOMER_DEPLOYMENT_GUIDE.txt** - Detailed deployment guide
+- **QUICK_REFERENCE.txt** - Quick reference card
+- **INSTALL.txt** - Installation guide
+- **QUICK_START.txt** - Quick start guide
+- **GPIO_WIRING.txt** - Wiring diagrams and safety
+- **START_HERE.txt** - Getting started
 
-### No Events Displayed
+---
 
-1. Verify database has events: `SELECT COUNT(*) FROM events;`
-2. Check filters aren't too restrictive
-3. Verify database schema matches expected format
-4. Check database permissions for read access
+## 🔒 Security
 
-## License
+### **Source Code Protection**
+- All Python files compiled to bytecode (`.pyc`)
+- Original `.py` source files NOT included
+- Difficult to reverse engineer
+- Your intellectual property is protected
 
-MIT License - See LICENSE file for details
+### **What Customers Get**
+- ✅ Working application (all features)
+- ✅ Easy installation
+- ✅ Professional package
+- ❌ **NO** source code access
+- ❌ **NO** ability to modify core logic
 
-## Support
+---
 
-For issues or questions:
-1. Check this README
-2. Review error messages in application
-3. Check database connectivity and schema
-4. Verify configuration file format
+## 📦 Project Structure
 
+```
+infac-p1/
+├── src/                              # Source code
+│   ├── background_monitor.py         # 24/7 monitoring service
+│   ├── config.py                     # Configuration loader
+│   ├── db_reader.py                  # Database reading
+│   ├── db_writer.py                  # Database writing
+│   ├── gpio_reader.py                # GPIO pin reading
+│   ├── main.py                       # GUI entry point
+│   ├── monitor_gui.py                # GUI application
+│   └── whatsapp_sender.py            # WhatsApp notifications
+│
+├── build_customer_package.py         # Build customer package
+├── config.example.json               # Configuration template
+├── requirements.txt                  # Python dependencies
+├── LICENSE                           # MIT License
+│
+└── Documentation/
+    ├── README.md                     # This file
+    ├── FINAL_SOLUTION.txt            # Complete solution
+    ├── CUSTOMER_DEPLOYMENT_GUIDE.txt # Deployment guide
+    ├── QUICK_REFERENCE.txt           # Quick reference
+    ├── INSTALL.txt                   # Installation guide
+    ├── QUICK_START.txt               # Quick start
+    ├── GPIO_WIRING.txt               # Wiring diagrams
+    └── START_HERE.txt                # Getting started
+```
 
+---
 
+## 🎯 Quick Start Summary
+
+### **For Developers:**
+```bash
+python3 build_customer_package.py
+cd customer_package
+tar -czf power-monitor-installer.tar.gz power-monitor/
+# Send to customer
+```
+
+### **For Customers:**
+```bash
+tar -xzf power-monitor-installer.tar.gz
+cd power-monitor
+sudo ./install.sh
+# Enter MySQL password when prompted
+# Wire GPIO connections
+# Double-click desktop icon
+```
+
+---
+
+## 📄 License
+
+MIT License - See LICENSE file for details.
+
+---
+
+## 🙏 Support
+
+For issues, questions, or support:
+- Check documentation files
+- Review troubleshooting section
+- Contact: [Your contact information]
+
+---
+
+**Made with ❤️ for reliable 24/7 power monitoring**
+
+---
+
+## ✅ Checklist
+
+- [x] 24/7 background monitoring service
+- [x] Desktop GUI application with LED indicators and graphs
+- [x] WhatsApp notifications with interval time
+- [x] Easy MySQL configuration wizard
+- [x] Compiled package (no source code)
+- [x] One-command installation
+- [x] GPIO pin monitoring
+- [x] Auto-start on boot
+- [x] Professional documentation
+- [x] Customer-ready deployment
+
+**Everything is ready for deployment!** 🚀

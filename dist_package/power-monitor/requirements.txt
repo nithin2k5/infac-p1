@@ -1,13 +1,23 @@
-# Core Dependencies
-mysql-connector-python>=8.0.0
-python-dotenv>=1.0.0
-matplotlib>=3.5.0
+# Database connector - use one of:
+# mysql-connector-python>=8.0.0
+# OR
+# pymysql>=1.0.0
 
-# WhatsApp Notifications (optional)
-twilio>=8.0.0
+# Minimal dependencies
+# MySQL connector (choose one)
+mysql-connector-python>=8.0.0
+
+# Environment variables management
+python-dotenv>=1.0.0
+
+# Graph plotting for dashboard
+matplotlib>=3.5.0
 
 # Raspberry Pi GPIO (only needed on Raspberry Pi)
 # RPi.GPIO>=0.7.1
+
+# Windows service support (only needed on Windows)
+# pywin32>=305
 
 # Note: Tkinter is part of Python's standard library but may require system packages:
 # - Ubuntu/Debian: sudo apt-get install python3-tk
