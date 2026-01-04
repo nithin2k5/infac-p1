@@ -1,0 +1,23 @@
+[Unit]
+Description=Power Monitor Service - 24/7 EB and Generator Monitoring
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/infac-p1
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/usr/bin/python3 -m src.background_monitor
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Restart policy
+StartLimitInterval=200
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
+

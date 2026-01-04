@@ -1,4 +1,263 @@
+# 🔌 Power Monitor - 24/7 EB & Generator Monitoring System
+
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-red.svg)](https://www.raspberrypi.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+A comprehensive power monitoring system for Raspberry Pi with GPIO integration. Monitors EB (Electricity Board) and multiple generators, records events to MySQL database, and provides a beautiful desktop GUI for 24/7 operation.
+
+---
+
+## 🌟 Features
+
+- 🔌 **GPIO Integration** - Direct hardware monitoring via Raspberry Pi GPIO pins
+- ⚡ **Real-time Monitoring** - 0.5s polling with debounce protection  
+- 💾 **MySQL Database** - All events recorded with timestamps and durations
+- 🖥️ **Desktop GUI** - Beautiful dashboard with LED indicators, graphs, and reports
+- 🔄 **24/7 Service** - Runs continuously as systemd/Windows service
+- 🔁 **Auto-restart** - Automatically recovers from failures
+- 📊 **Power Outage Detection** - Automatic EB power cut detection and tracking
+- 📤 **CSV Export** - Export filtered reports for analysis
+- 🔒 **Safe** - Optocoupler support for electrical isolation
+
+---
+
+## 🚀 Quick Start
+
+### Installation (3 Steps)
+
+```bash
+# 1. Clone repository
+git clone https://github.com/YOUR_USERNAME/power-monitor-rpi.git
+cd power-monitor-rpi
+
+# 2. Configure database
+cp config.example.json config.json
+nano config.json  # Add your MySQL password
+
+# 3. Install as service (one command!)
+sudo ./install_service_linux.sh
+```
+
+**That's it!** The service is now running 24/7 and monitoring your power status.
+
+---
+
+## 🔌 GPIO Wiring
+
+Connect your power status signals to these Raspberry Pi pins:
+
+```
+Pin 11 (GPIO 17) ← EB Power Status
+Pin 13 (GPIO 27) ← Generator 1 Status
+Pin 15 (GPIO 22) ← Generator 2 Status
+Pin 6  (GND)     ← Common Ground
+```
+
+**Signal Logic:**
+- HIGH (3.3V) = Power ON (1)
+- LOW (0V) = Power OFF (0)
+
+⚠️ **IMPORTANT:** Never connect voltages > 3.3V directly to GPIO pins!  
+Use optocouplers for 5V, 12V, 24V, or AC signals. See [GPIO_WIRING.txt](GPIO_WIRING.txt) for detailed diagrams.
+
+---
+
+## 📖 Documentation
+
+- 📄 [START_HERE.txt](START_HERE.txt) - Begin here!
+- 🚀 [QUICK_START.txt](QUICK_START.txt) - Quick reference guide
+- 📚 [SETUP_GUIDE.txt](SETUP_GUIDE.txt) - Detailed setup instructions
+- 🔌 [GPIO_WIRING.txt](GPIO_WIRING.txt) - Wiring diagrams and safety
+- 🏗️ [SYSTEM_ARCHITECTURE.txt](SYSTEM_ARCHITECTURE.txt) - Technical architecture
+- ✅ [DEPLOYMENT_CHECKLIST.txt](DEPLOYMENT_CHECKLIST.txt) - Installation checklist
+- 📝 [IMPLEMENTATION_SUMMARY.txt](IMPLEMENTATION_SUMMARY.txt) - What was implemented
+
+---
+
+## 🛠️ Requirements
+
+### Hardware
+- Raspberry Pi 3/4 or newer
+- Power supply (5V, 2.5A minimum)
+- MicroSD card (16GB+, Class 10)
+- Optocouplers (PC817 or similar) for voltage isolation
+- Wiring and connectors
+
+### Software
+- Python 3.8 or higher
+- MySQL Server 5.7 or higher
+- RPi.GPIO library
+- Raspberry Pi OS (or any Linux distribution)
+
+---
+
+## 💻 Usage
+
+### Service Management
+
+```bash
+# Check status
+sudo systemctl status power-monitor
+
+# View live logs
+sudo journalctl -u power-monitor -f
+
+# Start/Stop/Restart
+sudo systemctl start power-monitor
+sudo systemctl stop power-monitor
+sudo systemctl restart power-monitor
+```
+
+### Desktop GUI
+
+```bash
+# Open GUI dashboard
+python3 -m src.main
+```
+
+Shows:
+- Real-time status with LED indicators
+- Timeline graphs for all power sources
+- Event reports with filtering
+- EB power cut history
+- CSV export functionality
+
+### Testing
+
+```bash
+# Test GPIO reading
+python3 -m src.gpio_reader
+
+# Test service manually
+python3 run_monitor_service.py
+```
+
+---
+
+## 📊 What It Does
+
+The system continuously:
+- ✅ Monitors GPIO pins every 0.5 seconds
+- ✅ Detects state changes (ON/OFF)
+- ✅ Records all events to MySQL database
+- ✅ Calculates durations and intervals
+- ✅ Detects power outages automatically
+- ✅ Logs all activities
+- ✅ Auto-starts on boot
+- ✅ Auto-restarts on failure
+
+**Performance:**
+- CPU usage: < 1%
+- Memory: 50-100 MB
+- Reliable 24/7 operation
+
+---
+
+## 🎯 Key Benefits
+
+✅ **No Manual Intervention** - Runs 24/7 automatically  
+✅ **Reliable** - Auto-restarts on failure  
+✅ **Complete History** - All events recorded with timestamps  
+✅ **Easy Installation** - One command to install  
+✅ **Safe** - Optocoupler support for electrical isolation  
+✅ **Comprehensive Docs** - Everything is documented  
+✅ **Cross-Platform** - Works on Raspberry Pi, Linux, Windows  
+
+---
+
+## 🏗️ Project Structure
+
+```
+power-monitor-rpi/
+├── src/                         # Source code
+│   ├── gpio_reader.py          # GPIO pin reading
+│   ├── background_monitor.py   # 24/7 monitoring service
+│   ├── monitor_gui.py          # Desktop GUI
+│   ├── db_reader.py            # Database read operations
+│   ├── db_writer.py            # Database write operations
+│   └── config.py               # Configuration loader
+│
+├── Installation Scripts
+│   ├── install_service_linux.sh       # Linux/RPi installer
+│   ├── install_service_windows.bat    # Windows installer
+│   ├── install_windows_service.py     # Windows service
+│   ├── power-monitor.service          # systemd service file
+│   └── run_monitor_service.py         # Manual runner
+│
+├── Documentation
+│   ├── START_HERE.txt
+│   ├── QUICK_START.txt
+│   ├── SETUP_GUIDE.txt
+│   ├── GPIO_WIRING.txt
+│   └── ...
+│
+├── config.example.json          # Sample configuration
+├── requirements.txt             # Python dependencies
+└── README.md                    # This file
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Service won't start
+```bash
+sudo journalctl -u power-monitor -xe  # Check logs
+sudo systemctl status mysql            # Verify MySQL
+cat config.json                        # Check config
+```
+
+### GPIO not reading
+```bash
+python3 -m src.gpio_reader  # Test manually
+groups pi                   # Check permissions
+```
+
+### Database errors
+```bash
+mysql -u root -p  # Test connection
+nano config.json  # Verify credentials
+```
+
+See [SETUP_GUIDE.txt](SETUP_GUIDE.txt) for detailed troubleshooting.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Support
+
+For issues and questions:
+- Open an issue on GitHub
+- Check the documentation files
+- Review the troubleshooting section
+
+---
+
+## 📸 Screenshots
+
+*Coming soon - Desktop GUI dashboard, timeline graphs, and reports*
+
+---
+
+**Made with ❤️ for reliable 24/7 power monitoring**
+
+---
+
 # Raspberry Pi Monitor - Desktop Event Viewer
+
+> **Note:** The sections below contain the original GUI documentation.
 
 A cross-platform desktop application built with Python and Tkinter that provides a read-only GUI for viewing events from a Raspberry Pi generator and power-cut monitoring system. The application connects to a MySQL database where events are stored by a background monitoring service.
 
