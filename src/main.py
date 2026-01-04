@@ -2,9 +2,15 @@
 import sys
 import os
 
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 def main():
     """Main entry point."""
-    from .monitor_gui import MonitorGUI
+    try:
+        from src.monitor_gui import MonitorGUI
+    except ImportError:
+        from monitor_gui import MonitorGUI
     
     try:
         app = MonitorGUI()

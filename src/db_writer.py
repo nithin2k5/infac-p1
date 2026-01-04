@@ -48,6 +48,32 @@ class DatabaseWriter:
             'autocommit': True
         }
         self.database = database
+        
+        # Ensure database exists
+        self._ensure_database()
+    
+    def _ensure_database(self) -> None:
+        """Ensure database exists, create if it doesn't."""
+        conn = None
+        try:
+            # Connect without database first
+            params = self.connection_params.copy()
+            params.pop('database', None)
+            conn = mysql.connector.connect(**params)
+            cursor = conn.cursor()
+            
+            # Create database if it doesn't exist
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.database}")
+            conn.commit()
+            cursor.close()
+            
+            logger.info(f"Database '{self.database}' ensured to exist")
+        except Error as e:
+            logger.error(f"Error ensuring database exists: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
     
     def _get_connection(self):
         """Get database connection."""
