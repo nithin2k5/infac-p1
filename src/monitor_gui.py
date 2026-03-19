@@ -162,6 +162,11 @@ class MonitorGUI:
         self.eb_history_frame = ttk.Frame(self.notebook, padding="10")
         self.notebook.add(self.eb_history_frame, text="EB Power History")
         self._build_eb_history_page()
+        
+        # Page 4: Settings / Notifications
+        self.settings_frame = ttk.Frame(self.notebook, padding="20")
+        self.notebook.add(self.settings_frame, text="Notifications Settings")
+        self._build_settings_page()
     
     def _build_dashboard_page(self) -> None:
         """
@@ -1401,6 +1406,205 @@ METADATA
             self.auto_refresh_timer.daemon = True
             self.auto_refresh_timer.start()
     
+    def _build_settings_page(self) -> None:
+        """Build the Settings / Notifications page (Page 4)."""
+        # Configure layout
+        self.settings_frame.columnconfigure(0, weight=1)
+        self.settings_frame.columnconfigure(1, weight=1)
+        
+        # --- Left Column: SMTP Configuration ---
+        smtp_frame = ttk.LabelFrame(self.settings_frame, text="SMTP Configuration", padding="15")
+        smtp_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=10)
+        
+        # Enabled Checkbox
+        self.email_enabled_var = tk.BooleanVar(value=self.config.get("email.enabled", False))
+        ttk.Checkbutton(
+            smtp_frame, 
+            text="Enable Email Notifications", 
+            variable=self.email_enabled_var
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
+        
+        # SMTP Server
+        ttk.Label(smtp_frame, text="SMTP Server:").grid(row=1, column=0, sticky="w", pady=5)
+        self.smtp_server_var = tk.StringVar(value=self.config.get("email.smtp_server", "smtp.gmail.com"))
+        ttk.Entry(smtp_frame, textvariable=self.smtp_server_var, width=30).grid(row=1, column=1, sticky="w", pady=5)
+        
+        # SMTP Port
+        ttk.Label(smtp_frame, text="SMTP Port:").grid(row=2, column=0, sticky="w", pady=5)
+        self.smtp_port_var = tk.StringVar(value=str(self.config.get("email.smtp_port", 587)))
+        ttk.Entry(smtp_frame, textvariable=self.smtp_port_var, width=10).grid(row=2, column=1, sticky="w", pady=5)
+        
+        # SMTP Username
+        ttk.Label(smtp_frame, text="Username:").grid(row=3, column=0, sticky="w", pady=5)
+        self.smtp_user_var = tk.StringVar(value=self.config.get("email.smtp_username", ""))
+        ttk.Entry(smtp_frame, textvariable=self.smtp_user_var, width=30).grid(row=3, column=1, sticky="w", pady=5)
+        
+        # SMTP Password (masked)
+        ttk.Label(smtp_frame, text="Password:").grid(row=4, column=0, sticky="w", pady=5)
+        self.smtp_pass_var = tk.StringVar(value=self.config.get("email.smtp_password", ""))
+        ttk.Entry(smtp_frame, textvariable=self.smtp_pass_var, width=30, show="*").grid(row=4, column=1, sticky="w", pady=5)
+        
+        # Email From
+        ttk.Label(smtp_frame, text="Sender Email:").grid(row=5, column=0, sticky="w", pady=5)
+        self.email_from_var = tk.StringVar(value=self.config.get("email.from", ""))
+        ttk.Entry(smtp_frame, textvariable=self.email_from_var, width=30).grid(row=5, column=1, sticky="w", pady=5)
+        
+        # Rate Limit
+        ttk.Label(smtp_frame, text="Rate Limit (sec):").grid(row=6, column=0, sticky="w", pady=5)
+        self.rate_limit_var = tk.StringVar(value=str(self.config.get("email.rate_limit_seconds", 300)))
+        ttk.Entry(smtp_frame, textvariable=self.rate_limit_var, width=10).grid(row=6, column=1, sticky="w", pady=5)
+        
+        # Save Button for SMTP
+        ttk.Button(
+            smtp_frame, 
+            text="Save SMTP Settings", 
+            command=self._save_email_settings
+        ).grid(row=7, column=0, columnspan=2, pady=20)
+        
+        # --- Right Column: Recipient List ---
+        recipients_frame = ttk.LabelFrame(self.settings_frame, text="Email Recipients", padding="15")
+        recipients_frame.grid(row=0, column=1, sticky="nsew", pady=10)
+        
+        # List of recipients
+        self.recipients_listbox = tk.Listbox(recipients_frame, height=10, width=40)
+        self.recipients_listbox.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        
+        # Load current recipients
+        to_val = self.config.get("email.to", "")
+        if isinstance(to_val, list):
+            recipients = to_val
+        else:
+            recipients = [e.strip() for e in str(to_val).split(",") if e.strip()]
+        
+        for email in recipients:
+            self.recipients_listbox.insert(tk.END, email)
+            
+        # Controls for recipients
+        rec_controls = ttk.Frame(recipients_frame)
+        rec_controls.pack(fill=tk.X)
+        
+        ttk.Label(rec_controls, text="New Email:").pack(side=tk.LEFT, padx=(0, 5))
+        self.new_email_var = tk.StringVar()
+        ttk.Entry(rec_controls, textvariable=self.new_email_var, width=25).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(rec_controls, text="Add", command=self._add_recipient).pack(side=tk.LEFT, padx=2)
+        ttk.Button(rec_controls, text="Remove Selected", command=self._remove_recipient).pack(side=tk.LEFT, padx=2)
+        
+        # Instruction label
+        ttk.Label(
+            recipients_frame,
+            text="Changes to recipients are saved automatically.",
+            font=("Arial", 8, "italic"),
+            foreground="gray"
+        ).pack(pady=(10, 0))
+        
+        # --- Bottom Section: Notification History ---
+        history_frame = ttk.LabelFrame(self.settings_frame, text="Notification History (Last 50 Outages)", padding="15")
+        history_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=10)
+        
+        # Table for history
+        columns = ("Time", "Duration", "Generator", "Notified")
+        self.history_tree = ttk.Treeview(history_frame, columns=columns, show="headings", height=8)
+        
+        for col in columns:
+            self.history_tree.heading(col, text=col)
+            self.history_tree.column(col, width=150)
+            
+        self.history_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        
+        scrollbar = ttk.Scrollbar(history_frame, orient=tk.VERTICAL, command=self.history_tree.yview)
+        self.history_tree.configure(yscroll=scrollbar.set)
+        scrollbar.pack(fill=tk.Y, side=tk.RIGHT)
+        
+        # Refresh button for history
+        ttk.Button(history_frame, text="Refresh History", command=self._refresh_notification_history).pack(pady=10)
+        
+        # Load initial history
+        self._refresh_notification_history()
+
+    def _refresh_notification_history(self) -> None:
+        """Refresh the notification history table."""
+        # Clear current items
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
+            
+        try:
+            from .db_reader import DatabaseReader
+            db_config = self.config.get_database_config()
+            reader = DatabaseReader(**db_config)
+            history = reader.get_notification_history(50)
+            
+            for entry in history:
+                start_time = datetime.fromtimestamp(entry['outage_start']).strftime("%Y-%m-%d %H:%M:%S")
+                duration = f"{entry['duration_seconds']:.0f}s" if entry['duration_seconds'] else "Ongoing"
+                gen = entry['generator_input_id'].upper() if entry['generator_input_id'] else "None"
+                notified = "Yes" if entry['notification_sent'] else "No"
+                
+                self.history_tree.insert("", tk.END, values=(start_time, duration, gen, notified))
+        except Exception as e:
+            logger.error(f"Failed to refresh notification history: {e}")
+
+    def _save_email_settings(self) -> None:
+        """Save general email settings to config.json."""
+        try:
+            self.config.set("email.enabled", self.email_enabled_var.get())
+            self.config.set("email.smtp_server", self.smtp_server_var.get())
+            self.config.set("email.smtp_port", int(self.smtp_port_var.get()))
+            self.config.set("email.smtp_username", self.smtp_user_var.get())
+            self.config.set("email.smtp_password", self.smtp_pass_var.get())
+            self.config.set("email.from", self.email_from_var.get())
+            self.config.set("email.rate_limit_seconds", int(self.rate_limit_var.get()))
+            
+            self.config.save()
+            messagebox.showinfo("Success", "Email settings saved successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save settings: {e}")
+
+    def _add_recipient(self) -> None:
+        """Add a new recipient email address."""
+        email = self.new_email_var.get().strip()
+        if not email or "@" not in email:
+            messagebox.showwarning("Invalid Input", "Please enter a valid email address.")
+            return
+            
+        # Check if already exists
+        all_emails = list(self.recipients_listbox.get(0, tk.END))
+        if email in all_emails:
+            messagebox.showwarning("Duplicate", "This email is already in the list.")
+            return
+            
+        # Add to UI
+        self.recipients_listbox.insert(tk.END, email)
+        self.new_email_var.set("")
+        
+        # Save to config
+        all_emails.append(email)
+        self.config.set("email.to", all_emails)
+        self.config.save()
+
+    def _remove_recipient(self) -> None:
+        """Remove the selected recipient."""
+        selection = self.recipients_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Selection Required", "Please select an email to remove.")
+            return
+            
+        # Get selected value and index
+        index = selection[0]
+        
+        # Confirm
+        email = self.recipients_listbox.get(index)
+        if not messagebox.askyesno("Confirm", f"Remove {email} from recipients?"):
+            return
+            
+        # Remove from UI
+        self.recipients_listbox.delete(index)
+        
+        # Save to config
+        all_emails = list(self.recipients_listbox.get(0, tk.END))
+        self.config.set("email.to", all_emails)
+        self.config.save()
+
     def run(self) -> None:
         """Run the application."""
         try:
@@ -1412,4 +1616,5 @@ METADATA
                 self.auto_refresh_timer.cancel()
             if self.dashboard_auto_refresh_timer:
                 self.dashboard_auto_refresh_timer.cancel()
+
 

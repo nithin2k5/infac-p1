@@ -6,8 +6,8 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from typing import Optional
-
+from typing import Optional, List
+from .config import Config  # type: ignore
 # Try to load .env file
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -23,26 +23,54 @@ logger = logging.getLogger(__name__)
 class EmailSender:
     """Sends Email notifications with interval time information."""
     
-    def __init__(self):
-        """Initialize Email sender from environment variables."""
-        self.enabled = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
-        self.rate_limit_seconds = int(os.getenv("EMAIL_RATE_LIMIT_SECONDS", "300"))
-        self.last_notification_time: Optional[float] = None
+    def __init__(self, config: Optional[Config] = None):
+        """
+        Initialize Email sender from config or environment variables.
         
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_username = os.getenv("SMTP_USERNAME", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.email_from = os.getenv("EMAIL_FROM", self.smtp_username or "")
-        self.email_to = os.getenv("EMAIL_TO", "")
+        Args:
+            config: Config object to load settings from.
+        """
+        self.config = config
+        
+        if config:
+            self.enabled = config.get("email.enabled", False)
+            self.rate_limit_seconds = int(config.get("email.rate_limit_seconds", 300))
+            
+            self.smtp_server = config.get("email.smtp_server", "smtp.gmail.com")
+            self.smtp_port = int(config.get("email.smtp_port", 587))
+            self.smtp_username = config.get("email.smtp_username", "")
+            self.smtp_password = config.get("email.smtp_password", "")
+            self.email_from = config.get("email.from", self.smtp_username or "")
+            
+            # Handle multiple emails (comma separated or list)
+            to_val = config.get("email.to", "")
+            if isinstance(to_val, list):
+                self.emails_to = to_val
+            else:
+                self.emails_to = [e.strip() for e in str(to_val).split(",") if e.strip()]
+        else:
+            # Fallback to environment variables
+            self.enabled = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+            self.rate_limit_seconds = int(os.getenv("EMAIL_RATE_LIMIT_SECONDS", "300"))
+            
+            self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+            self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+            self.smtp_username = os.getenv("SMTP_USERNAME", "")
+            self.smtp_password = os.getenv("SMTP_PASSWORD", "")
+            self.email_from = os.getenv("EMAIL_FROM", self.smtp_username or "")
+            
+            to_env = os.getenv("EMAIL_TO", "")
+            self.emails_to = [e.strip() for e in to_env.split(",") if e.strip()]
+        
+        self.last_notification_time: Optional[float] = None
         
         if not self.enabled:
             logger.info("Email notifications are disabled")
-        elif not all([self.smtp_username, self.smtp_password, self.email_to]):
-            logger.warning("Email is enabled but missing SMTP credentials or destination in .env")
+        elif not all([self.smtp_username, self.smtp_password, self.emails_to]):
+            logger.warning("Email is enabled but missing SMTP credentials or destination")
             self.enabled = False
         else:
-            logger.info("Email notification provider initialized")
+            logger.info(f"Email notification provider initialized with {len(self.emails_to)} recipients")
     
     def _format_duration(self, seconds: float) -> str:
         """Format duration in human-readable format."""
@@ -108,7 +136,7 @@ Status: Generator is now active.
         try:
             msg = MIMEMultipart()
             msg['From'] = self.email_from or ""
-            msg['To'] = self.email_to or ""
+            msg['To'] = ", ".join(self.emails_to)
             msg['Subject'] = subject
             
             msg.attach(MIMEText(message_body, 'plain'))

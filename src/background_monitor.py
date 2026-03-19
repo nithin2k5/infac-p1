@@ -49,12 +49,13 @@ class BackgroundMonitor:
         )
         
         # Initialize Email sender
-        self.email = EmailSender()
+        self.email = EmailSender(self.config)
         
         # State tracking
         self.running: bool = False
         self.start_time: Optional[datetime] = None
         self.eb_outage_start_time: Optional[float] = None
+        self.current_outage_id: Optional[int] = None
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -210,7 +211,13 @@ class BackgroundMonitor:
     def _handle_power_outage(self, timestamp: float) -> None:
         """Handle EB power outage."""
         self.eb_outage_start_time = timestamp
-        logger.warning("Power outage recorded at timestamp: {}".format(timestamp))
+        try:
+            self.current_outage_id = self.db_writer.insert_outage(timestamp)
+            logger.warning(f"Power outage recorded at timestamp: {timestamp} (Outage ID: {self.current_outage_id})")
+        except Exception as e:
+            logger.error(f"Failed to record outage in database: {e}")
+            self.current_outage_id = None
+            logger.warning(f"Power outage recorded at timestamp: {timestamp}")
     
     def _handle_power_restored(self, timestamp: float) -> None:
         """Handle EB power restoration."""
@@ -218,7 +225,15 @@ class BackgroundMonitor:
         if eb_start:
             duration = timestamp - eb_start
             logger.info(f"Power restored after {duration:.0f} seconds")
+            
+            if self.current_outage_id:
+                try:
+                    self.db_writer.update_outage_end(self.current_outage_id, timestamp, duration)
+                except Exception as e:
+                    logger.error(f"Failed to update outage end in database: {e}")
+            
             self.eb_outage_start_time = None
+            self.current_outage_id = None
     
     def _handle_generator_activation(self, generator_id: str, timestamp: float) -> None:
         """Handle generator activation and send Email notification."""
@@ -241,12 +256,26 @@ class BackgroundMonitor:
         )
         
         # Send Email notification
+        notification_sent = False
         try:
-            self.email.send_generator_activation_notification(
+            notification_sent = self.email.send_generator_activation_notification(
                 generator_name=generator_name,
-                outage_start_time=self.eb_outage_start_time,
+                outage_start_time=eb_start,
                 generator_start_time=timestamp
             )
+            
+            # Update outage record with generator info and notification status
+            if self.current_outage_id:
+                try:
+                    self.db_writer.update_outage_generator(
+                        self.current_outage_id, 
+                        generator_id, 
+                        timestamp,
+                        notification_sent=notification_sent
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to update outage generator in database: {e}")
+                    
         except Exception as e:
             logger.error(f"Failed to send Email notification: {e}")
     

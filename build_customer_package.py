@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 if sys.platform.startswith('win'):
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding='utf-8')  # type: ignore
 
 # Colors for output
 class Colors:
@@ -102,7 +102,7 @@ def main():
     for py_file in src_dir.glob('*.py'):
         if py_file.name != '__init__.py':
             if compile_python_file(py_file, pkg_src_dir):
-                compiled_count = compiled_count + 1
+                compiled_count += 1  # type: ignore
                 print(f"  [OK] {py_file.name} -> {py_file.stem}.pyc")
     
     # Copy __init__.py as is (needed for package)
