@@ -7,10 +7,10 @@ from datetime import datetime
 from typing import Optional
 import threading
 
-from .config import Config
-from .gpio_reader import GPIOReader
-from .db_writer import DatabaseWriter
-from .whatsapp_sender import WhatsAppSender
+from .config import Config  # type: ignore
+from .gpio_reader import GPIOReader  # type: ignore
+from .db_writer import DatabaseWriter  # type: ignore
+from .email_sender import EmailSender  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +48,13 @@ class BackgroundMonitor:
             debounce_time=0.1   # 100ms debounce
         )
         
-        # Initialize WhatsApp sender
-        self.whatsapp = WhatsAppSender()
+        # Initialize Email sender
+        self.email = EmailSender()
         
         # State tracking
-        self.running = False
-        self.start_time = None
-        self.eb_outage_start_time = None
+        self.running: bool = False
+        self.start_time: Optional[datetime] = None
+        self.eb_outage_start_time: Optional[float] = None
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -176,8 +176,10 @@ class BackgroundMonitor:
                 
                 # Periodic status update (every hour)
                 if int(time.time()) % 3600 == 0:
-                    uptime = datetime.now() - self.start_time
-                    logger.info(f"Service running - Uptime: {uptime}")
+                    st = self.start_time
+                    if st:
+                        uptime = datetime.now() - st
+                        logger.info(f"Service running - Uptime: {uptime}")
                     
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")
@@ -198,8 +200,9 @@ class BackgroundMonitor:
         # Close database connection
         self.db_writer.close()
         
-        if self.start_time:
-            uptime = datetime.now() - self.start_time
+        st = self.start_time
+        if st:
+            uptime = datetime.now() - st
             logger.info(f"Service stopped. Total uptime: {uptime}")
         
         logger.info("Background monitor service stopped")
@@ -211,19 +214,21 @@ class BackgroundMonitor:
     
     def _handle_power_restored(self, timestamp: float) -> None:
         """Handle EB power restoration."""
-        if self.eb_outage_start_time:
-            duration = timestamp - self.eb_outage_start_time
+        eb_start = self.eb_outage_start_time
+        if eb_start:
+            duration = timestamp - eb_start
             logger.info(f"Power restored after {duration:.0f} seconds")
             self.eb_outage_start_time = None
     
     def _handle_generator_activation(self, generator_id: str, timestamp: float) -> None:
-        """Handle generator activation and send WhatsApp notification."""
-        if not self.eb_outage_start_time:
+        """Handle generator activation and send Email notification."""
+        eb_start = self.eb_outage_start_time
+        if not eb_start:
             # Generator turned on but no outage recorded
             return
         
         # Calculate interval time (power cut to generator ON)
-        interval_seconds = timestamp - self.eb_outage_start_time
+        interval_seconds = timestamp - eb_start
         
         generator_names = {
             'gen1': 'Generator 1 (GEN1)',
@@ -235,24 +240,25 @@ class BackgroundMonitor:
             f"{generator_name} activated {interval_seconds:.1f} seconds after power cut"
         )
         
-        # Send WhatsApp notification
+        # Send Email notification
         try:
-            self.whatsapp.send_generator_activation_notification(
+            self.email.send_generator_activation_notification(
                 generator_name=generator_name,
                 outage_start_time=self.eb_outage_start_time,
                 generator_start_time=timestamp
             )
         except Exception as e:
-            logger.error(f"Failed to send WhatsApp notification: {e}")
+            logger.error(f"Failed to send Email notification: {e}")
     
     def get_status(self) -> dict:
         """Get current service status."""
+        st = self.start_time
         return {
             'running': self.running,
-            'start_time': self.start_time.isoformat() if self.start_time else None,
-            'uptime': str(datetime.now() - self.start_time) if self.start_time else None,
+            'start_time': st.isoformat() if st else None,
+            'uptime': str(datetime.now() - st) if st else None,
             'pin_config': self.gpio_reader.get_pin_config(),
-            'whatsapp_enabled': self.whatsapp.enabled
+            'email_enabled': self.email.enabled
         }
 
 

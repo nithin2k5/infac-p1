@@ -2,7 +2,7 @@
 
 **24/7 EB & Generator Monitoring System for Raspberry Pi**
 
-A professional power monitoring system with GPIO integration, WhatsApp notifications, and desktop GUI - ready for customer deployment without exposing source code.
+A professional power monitoring system with GPIO integration, Email notifications, and desktop GUI - ready for customer deployment without exposing source code.
 
 ---
 
@@ -14,7 +14,7 @@ A professional power monitoring system with GPIO integration, WhatsApp notificat
 - Power outage detection and tracking
 - Auto-starts on boot, auto-restarts on failure
 
-### ✅ **WhatsApp Notifications**
+### ✅ **Email Notifications**
 - Power outage alerts
 - Generator activation notifications **with interval time**
 - Power restoration alerts
@@ -39,7 +39,7 @@ A professional power monitoring system with GPIO integration, WhatsApp notificat
 
 1. [For Developers](#for-developers-build--deploy)
 2. [For Customers](#for-customers-installation)
-3. [WhatsApp Notifications](#whatsapp-notifications)
+3. [Email Notifications](#email-notifications)
 4. [MySQL Configuration](#mysql-configuration)
 5. [GPIO Wiring](#gpio-wiring)
 6. [UI Features](#ui-features)
@@ -76,7 +76,7 @@ python3 build_customer_package.py
   ✓ gpio_reader.py → gpio_reader.pyc
   ✓ main.py → main.pyc
   ✓ monitor_gui.py → monitor_gui.pyc
-  ✓ whatsapp_sender.py → whatsapp_sender.pyc
+  ✓ email_sender.py → email_sender.pyc
 ✓ Compiled 8 files
 
 [4/7] Copying configuration and documentation...
@@ -196,26 +196,28 @@ See `GPIO_WIRING.txt` for detailed diagrams.
 
 ---
 
-## 📱 WhatsApp Notifications
+## 📧 Email Notifications
 
 ### **Setup (Optional)**
 
-1. Get Twilio account: https://www.twilio.com (free trial available)
+1. Prepare an App Password for your email (e.g., Gmail)
 
-2. Create `.env` file:
+2. Create your `.env` file from the provided example:
 ```bash
+cp /opt/power-monitor/.env.example /opt/power-monitor/.env
 sudo nano /opt/power-monitor/.env
 ```
 
 3. Add configuration:
 ```bash
-WHATSAPP_ENABLED=true
-WHATSAPP_PROVIDER=twilio
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=your_auth_token_here
-TWILIO_FROM_NUMBER=whatsapp:+14155238886
-TWILIO_TO_NUMBER=whatsapp:+919876543210
-WHATSAPP_RATE_LIMIT_SECONDS=300
+EMAIL_ENABLED=true
+EMAIL_RATE_LIMIT_SECONDS=300
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+EMAIL_FROM=your_email@gmail.com
+EMAIL_TO=recipient@example.com
 ```
 
 4. Restart service:
@@ -481,7 +483,7 @@ sudo python3 /opt/power-monitor/configure_mysql.py
 mysql -u root -p
 ```
 
-### **WhatsApp Not Working**
+### **Email Not Working**
 ```bash
 # Check .env file exists
 ls -la /opt/power-monitor/.env
@@ -490,7 +492,7 @@ ls -la /opt/power-monitor/.env
 cat /opt/power-monitor/.env
 
 # Check service logs
-sudo journalctl -u power-monitor | grep -i whatsapp
+sudo journalctl -u power-monitor | grep -i email
 ```
 
 ### **GUI Won't Open**
@@ -530,13 +532,9 @@ python3 -c "from src.db_reader import DatabaseReader; db = DatabaseReader(); pri
 
 ## 📚 Documentation
 
-- **FINAL_SOLUTION.txt** - Complete solution overview
-- **CUSTOMER_DEPLOYMENT_GUIDE.txt** - Detailed deployment guide
-- **QUICK_REFERENCE.txt** - Quick reference card
-- **INSTALL.txt** - Installation guide
-- **QUICK_START.txt** - Quick start guide
-- **GPIO_WIRING.txt** - Wiring diagrams and safety
-- **START_HERE.txt** - Getting started
+- **raspberry_pi_setup.txt** - Complete Raspberry Pi installation and wiring guide
+- **raspberry_pi_services.txt** - Background service operations and commands
+- **raspberry_pi_pin_configuration.txt** - GPIO pin assignments and logic
 
 ---
 
@@ -569,22 +567,19 @@ infac-p1/
 │   ├── gpio_reader.py                # GPIO pin reading
 │   ├── main.py                       # GUI entry point
 │   ├── monitor_gui.py                # GUI application
-│   └── whatsapp_sender.py            # WhatsApp notifications
+│   └── email_sender.py               # Email notifications
 │
 ├── build_customer_package.py         # Build customer package
 ├── config.example.json               # Configuration template
+├── .env.example                      # WhatsApp credentials template
 ├── requirements.txt                  # Python dependencies
 ├── LICENSE                           # MIT License
 │
 └── Documentation/
-    ├── README.md                     # This file
-    ├── FINAL_SOLUTION.txt            # Complete solution
-    ├── CUSTOMER_DEPLOYMENT_GUIDE.txt # Deployment guide
-    ├── QUICK_REFERENCE.txt           # Quick reference
-    ├── INSTALL.txt                   # Installation guide
-    ├── QUICK_START.txt               # Quick start
-    ├── GPIO_WIRING.txt               # Wiring diagrams
-    └── START_HERE.txt                # Getting started
+    ├── README.md                          # This file
+    ├── raspberry_pi_setup.txt             # Raspberry Pi installation guide
+    ├── raspberry_pi_services.txt          # Background service details
+    └── raspberry_pi_pin_configuration.txt # GPIO pin assignments
 ```
 
 ---
@@ -634,7 +629,7 @@ For issues, questions, or support:
 
 - [x] 24/7 background monitoring service
 - [x] Desktop GUI application with LED indicators and graphs
-- [x] WhatsApp notifications with interval time
+- [x] Email notifications with interval time
 - [x] Easy MySQL configuration wizard
 - [x] Compiled package (no source code)
 - [x] One-command installation

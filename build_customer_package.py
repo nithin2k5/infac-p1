@@ -10,6 +10,9 @@ import py_compile
 import subprocess
 from pathlib import Path
 
+if sys.platform.startswith('win'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 # Colors for output
 class Colors:
     BLUE = '\033[0;34m'
@@ -27,13 +30,13 @@ def print_step(step, total, text):
     print(f"{Colors.BLUE}[{step}/{total}]{Colors.NC} {text}")
 
 def print_success(text):
-    print(f"{Colors.GREEN}✓{Colors.NC} {text}")
+    print(f"{Colors.GREEN}[OK]{Colors.NC} {text}")
 
 def print_error(text):
-    print(f"{Colors.RED}✗{Colors.NC} {text}")
+    print(f"{Colors.RED}[ERR]{Colors.NC} {text}")
 
 def print_warning(text):
-    print(f"{Colors.YELLOW}⚠{Colors.NC} {text}")
+    print(f"{Colors.YELLOW}[WARN]{Colors.NC} {text}")
 
 def compile_python_file(src_file, dest_dir):
     """Compile a Python file to bytecode."""
@@ -94,13 +97,13 @@ def main():
     # Compile Python files
     print_step(3, 7, "Compiling Python source files...")
     src_dir = script_dir / 'src'
-    compiled_count = 0
+    compiled_count: int = 0
     
     for py_file in src_dir.glob('*.py'):
         if py_file.name != '__init__.py':
             if compile_python_file(py_file, pkg_src_dir):
-                compiled_count += 1
-                print(f"  ✓ {py_file.name} → {py_file.stem}.pyc")
+                compiled_count = compiled_count + 1
+                print(f"  [OK] {py_file.name} -> {py_file.stem}.pyc")
     
     # Copy __init__.py as is (needed for package)
     shutil.copy2(src_dir / '__init__.py', pkg_src_dir / '__init__.py')
@@ -123,7 +126,7 @@ def main():
         src_file = script_dir / filename
         if src_file.exists():
             shutil.copy2(src_file, pkg_dir / filename)
-            print(f"  ✓ {filename}")
+            print(f"  [OK] {filename}")
         else:
             print_warning(f"  ! {filename} not found, skipping")
     
@@ -149,13 +152,13 @@ NC='\\033[0m'
 
 echo -e "${BLUE}"
 cat << "EOF"
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║           POWER MONITOR - INSTALLATION                       ║
-║                                                               ║
-║     24/7 EB & Generator Monitoring System                    ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
++---------------------------------------------------------------╗
+|                                                               |
+|           POWER MONITOR - INSTALLATION                       |
+|                                                               |
+|     24/7 EB & Generator Monitoring System                    |
+|                                                               |
++---------------------------------------------------------------╝
 EOF
 echo -e "${NC}"
 
@@ -177,24 +180,24 @@ echo -e "${BLUE}[1/9]${NC} Creating installation directory..."
 mkdir -p "$INSTALL_DIR"
 cp -r . "$INSTALL_DIR/"
 chown -R $ACTUAL_USER:$ACTUAL_USER "$INSTALL_DIR"
-echo -e "${GREEN}✓${NC} Installed to: $INSTALL_DIR"
+echo -e "${GREEN}[OK]${NC} Installed to: $INSTALL_DIR"
 
 # Step 2: Install system dependencies
 echo -e "${BLUE}[2/9]${NC} Installing system dependencies..."
 apt-get update -qq
 apt-get install -y -qq python3-pip python3-tk mysql-server > /dev/null 2>&1
-echo -e "${GREEN}✓${NC} System dependencies installed"
+echo -e "${GREEN}[OK]${NC} System dependencies installed"
 
 # Step 3: Install Python packages
 echo -e "${BLUE}[3/9]${NC} Installing Python packages..."
 pip3 install -q -r "$INSTALL_DIR/requirements.txt"
-pip3 install -q RPi.GPIO twilio python-dotenv
-echo -e "${GREEN}✓${NC} Python packages installed"
+pip3 install -q RPi.GPIO python-dotenv
+echo -e "${GREEN}[OK]${NC} Python packages installed"
 
 # Step 4: Run MySQL configuration wizard
 echo -e "${BLUE}[4/9]${NC} Configuring MySQL..."
 python3 "$INSTALL_DIR/configure_mysql.py"
-echo -e "${GREEN}✓${NC} MySQL configured"
+echo -e "${GREEN}[OK]${NC} MySQL configured"
 
 # Step 5: Setup configuration
 echo -e "${BLUE}[5/9]${NC} Setting up application configuration..."
@@ -202,7 +205,7 @@ if [ ! -f "$INSTALL_DIR/config.json" ]; then
     cp "$INSTALL_DIR/config.example.json" "$INSTALL_DIR/config.json"
     chown $ACTUAL_USER:$ACTUAL_USER "$INSTALL_DIR/config.json"
 fi
-echo -e "${GREEN}✓${NC} Configuration ready"
+echo -e "${GREEN}[OK]${NC} Configuration ready"
 
 # Step 6: Install service
 echo -e "${BLUE}[6/9]${NC} Installing background service..."
@@ -230,7 +233,7 @@ EOF
 systemctl daemon-reload
 systemctl enable power-monitor.service > /dev/null 2>&1
 systemctl start power-monitor.service
-echo -e "${GREEN}✓${NC} Service installed and started"
+echo -e "${GREEN}[OK]${NC} Service installed and started"
 
 # Step 7: Create desktop shortcut
 echo -e "${BLUE}[7/9]${NC} Creating desktop shortcut..."
@@ -250,7 +253,7 @@ Categories=Utility;System;Monitor;
 EOF
 chmod +x "$DESKTOP_DIR/PowerMonitor.desktop"
 chown $ACTUAL_USER:$ACTUAL_USER "$DESKTOP_DIR/PowerMonitor.desktop"
-echo -e "${GREEN}✓${NC} Desktop shortcut created"
+echo -e "${GREEN}[OK]${NC} Desktop shortcut created"
 
 # Step 8: Create menu entry
 echo -e "${BLUE}[8/9]${NC} Creating application menu entry..."
@@ -270,36 +273,36 @@ Categories=Utility;System;Monitor;
 EOF
 chmod +x "$APPS_DIR/power-monitor.desktop"
 chown $ACTUAL_USER:$ACTUAL_USER "$APPS_DIR/power-monitor.desktop"
-echo -e "${GREEN}✓${NC} Menu entry created"
+echo -e "${GREEN}[OK]${NC} Menu entry created"
 
 # Step 9: Set permissions
 echo -e "${BLUE}[9/9]${NC} Setting permissions..."
 usermod -a -G gpio $ACTUAL_USER > /dev/null 2>&1 || true
 chmod -R 755 "$INSTALL_DIR"
-echo -e "${GREEN}✓${NC} Permissions configured"
+echo -e "${GREEN}[OK]${NC} Permissions configured"
 
 echo ""
 echo -e "${GREEN}"
 cat << "EOF"
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║              INSTALLATION COMPLETED!                          ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
++---------------------------------------------------------------╗
+|                                                               |
+|              INSTALLATION COMPLETED!                          |
+|                                                               |
++---------------------------------------------------------------╝
 EOF
 echo -e "${NC}"
 
 echo -e "${GREEN}Installation Summary:${NC}"
 echo ""
-echo "  ✓ Background Service (24/7 monitoring)"
-echo "  ✓ Desktop GUI Application"
-echo "  ✓ Desktop Shortcut"
-echo "  ✓ Application Menu Entry"
+echo "  [OK] Background Service (24/7 monitoring)"
+echo "  [OK] Desktop GUI Application"
+echo "  [OK] Desktop Shortcut"
+echo "  [OK] Application Menu Entry"
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
 echo ""
 echo "  1. Wire GPIO connections (see GPIO_WIRING.txt)"
-echo "  2. Configure WhatsApp notifications (optional):"
+echo "  2. Configure Email notifications (optional):"
 echo "     sudo nano $INSTALL_DIR/.env"
 echo "  3. Restart service:"
 echo "     sudo systemctl restart power-monitor"
@@ -310,7 +313,7 @@ echo ""
 '''
     
     installer_file = pkg_dir / 'install.sh'
-    installer_file.write_text(installer_content)
+    installer_file.write_text(installer_content, encoding='utf-8')
     installer_file.chmod(0o755)
     print_success("Installer created")
     print()
@@ -368,7 +371,7 @@ def main():
     
     # Test connection
     if test_mysql_connection(host, int(port), user, password, database):
-        print("✓ Connection successful!")
+        print("[OK] Connection successful!")
         
         # Update config.json
         config_file = "/opt/power-monitor/config.json"
@@ -388,13 +391,13 @@ def main():
             with open(config_file, 'w') as f:
                 json.dump(config, f, indent=2)
             
-            print(f"✓ Configuration saved to {config_file}")
+            print(f"[OK] Configuration saved to {config_file}")
             return 0
         except Exception as e:
-            print(f"✗ Failed to save configuration: {e}")
+            print(f"[ERR] Failed to save configuration: {e}")
             return 1
     else:
-        print("✗ Connection failed. Please check your credentials.")
+        print("[ERR] Connection failed. Please check your credentials.")
         return 1
 
 if __name__ == "__main__":
@@ -402,7 +405,7 @@ if __name__ == "__main__":
 '''
     
     mysql_config_file = pkg_dir / 'configure_mysql.py'
-    mysql_config_file.write_text(mysql_config_content)
+    mysql_config_file.write_text(mysql_config_content, encoding='utf-8')
     mysql_config_file.chmod(0o755)
     print_success("MySQL wizard created")
     print()
@@ -429,11 +432,11 @@ QUICK INSTALLATION:
 3. Follow the on-screen instructions
 
 4. The installer will:
-   ✓ Install all dependencies
-   ✓ Configure MySQL (interactive wizard)
-   ✓ Install 24/7 background service
-   ✓ Create desktop shortcut
-   ✓ Set up everything automatically
+   [OK] Install all dependencies
+   [OK] Configure MySQL (interactive wizard)
+   [OK] Install 24/7 background service
+   [OK] Create desktop shortcut
+   [OK] Set up everything automatically
 
 5. Wire GPIO connections (see GPIO_WIRING.txt)
 
@@ -442,13 +445,13 @@ QUICK INSTALLATION:
 WHAT YOU GET:
 -------------
 
-✓ 24/7 Background Service
+[OK] 24/7 Background Service
   - Monitors GPIO pins continuously
   - Records events to MySQL database
   - Auto-starts on boot
-  - WhatsApp notifications (optional)
+  - Email notifications (optional)
 
-✓ Desktop GUI Application
+[OK] Desktop GUI Application
   - Real-time status dashboard
   - Timeline graphs
   - Event reports
@@ -462,26 +465,28 @@ Pin 13 (GPIO 27) ← Generator 1 Status
 Pin 15 (GPIO 22) ← Generator 2 Status
 Pin 6  (GND)     ← Common Ground
 
-⚠️ Use 3.3V logic signals!
-⚠️ Use optocouplers for higher voltages!
+[WARN]️ Use 3.3V logic signals!
+[WARN]️ Use optocouplers for higher voltages!
 
-WHATSAPP NOTIFICATIONS (OPTIONAL):
------------------------------------
+EMAIL NOTIFICATIONS (OPTIONAL):
+--------------------------------
 
-To enable WhatsApp notifications:
+To enable Email notifications:
 
-1. Get Twilio account (https://www.twilio.com)
-2. Create .env file:
+1. Prepare an App Password for your email (e.g., Gmail)
+2. Compile the template:
+   cp /opt/power-monitor/.env.example /opt/power-monitor/.env
    sudo nano /opt/power-monitor/.env
 
 3. Add your credentials:
-   WHATSAPP_ENABLED=true
-   WHATSAPP_PROVIDER=twilio
-   TWILIO_ACCOUNT_SID=your_account_sid
-   TWILIO_AUTH_TOKEN=your_auth_token
-   TWILIO_FROM_NUMBER=whatsapp:+14155238886
-   TWILIO_TO_NUMBER=whatsapp:+919876543210
-   WHATSAPP_RATE_LIMIT_SECONDS=300
+   EMAIL_ENABLED=true
+   EMAIL_RATE_LIMIT_SECONDS=300
+   SMTP_SERVER=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USERNAME=your_email@gmail.com
+   SMTP_PASSWORD=your_app_password
+   EMAIL_FROM=your_email@gmail.com
+   EMAIL_TO=recipient@example.com
 
 4. Restart service:
    sudo systemctl restart power-monitor
@@ -500,7 +505,7 @@ Installation location: /opt/power-monitor
 '''
     
     readme_file = pkg_dir / 'README.txt'
-    readme_file.write_text(readme_content)
+    readme_file.write_text(readme_content, encoding='utf-8')
     print_success("README created")
     print()
     
@@ -510,13 +515,13 @@ Installation location: /opt/power-monitor
     print_success(f"Customer package created: {pkg_dir}")
     print()
     print("Package contents:")
-    print(f"  • Compiled Python bytecode (.pyc files)")
-    print(f"  • Installation script (install.sh)")
-    print(f"  • MySQL configuration wizard")
-    print(f"  • Configuration templates")
-    print(f"  • Customer documentation")
+    print(f"  * Compiled Python bytecode (.pyc files)")
+    print(f"  * Installation script (install.sh)")
+    print(f"  * MySQL configuration wizard")
+    print(f"  * Configuration templates")
+    print(f"  * Customer documentation")
     print()
-    print(f"{Colors.GREEN}✓ NO SOURCE CODE INCLUDED{Colors.NC}")
+    print(f"{Colors.GREEN}[OK] NO SOURCE CODE INCLUDED{Colors.NC}")
     print()
     print("To distribute:")
     print(f"  1. Archive: tar -czf power-monitor-installer.tar.gz -C {dist_dir} power-monitor")
