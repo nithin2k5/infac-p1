@@ -1,0 +1,29 @@
+================================================================================
+                    POWER MONITOR - PIN CONFIGURATION
+================================================================================
+
+⚠️ ALERTS: Ensure your Raspberry Pi is completely powered OFF before making any wiring connections.
+
+1. WIRING CONNECTIONS (PHYSICAL HEADER)
+---------------------------------------
+Connect your power status signals to the following physical pins on the Raspberry Pi header:
+
+• Pin 11 (GPIO 17)  <--  EB (Grid) Power Status
+• Pin 13 (GPIO 27)  <--  Generator 1 Status
+• Pin 15 (GPIO 22)  <--  Generator 2 Status
+• Pin 6             <--  Common Ground (GND)
+
+2. SOFTWARE CONFIGURATION (config.json)
+---------------------------------------
+These pins are mapped automatically in the `config.json` file. If you ever need to change the physical pins, update the "gpio" section inside `config.json`:
+
+"gpio": {
+  "enabled": true,
+  "pins": {
+    "eb": 17,
+    "gen1": 27,
+    "gen2": 22
+  }
+}
+
+Note: The software configuration uses the BCM GPIO numbering (e.g., 17), which maps to the physical board pins (e.g., Pin 11).
