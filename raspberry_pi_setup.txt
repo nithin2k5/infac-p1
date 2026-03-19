@@ -1,0 +1,41 @@
+================================================================================
+                    POWER MONITOR - SETUP GUIDE
+================================================================================
+
+1. TRANSFER & EXTRACT
+---------------------
+Transfer the project files to your Raspberry Pi (e.g., via USB or network):
+scp -r power-monitor-rpi pi@raspberrypi.local:/home/pi/
+
+2. RUN INSTALLER
+----------------
+SSH into the Raspberry Pi (or open a terminal on it) and run the setup script:
+cd power-monitor-rpi
+sudo ./setup.sh
+
+This step will automatically install the MySQL server, Python dependencies, and set up the desktop shortcuts.
+
+3. CONFIGURE DATABASE
+---------------------
+Edit `config.json` to configure your MySQL password:
+nano config.json
+(Change "password": "YOUR_MYSQL_PASSWORD_HERE" to match your MySQL setup)
+
+4. WIRE GPIO CONNECTIONS
+------------------------
+(Ensure Raspberry Pi is powered OFF before wiring)
+Pin 11 (GPIO 17) ← EB Power Status
+Pin 13 (GPIO 27) ← Generator 1 Status
+Pin 15 (GPIO 22) ← Generator 2 Status
+Pin 6  (GND)     ← Common Ground
+
+5. RESTART SERVICE
+------------------
+Start monitoring with the new configuration:
+sudo systemctl restart power-monitor
+
+6. DESKTOP VISUALIZATION
+------------------------
+The data recorded by the Pi can be visualized in the desktop application.
+Open the GUI by double-clicking the "Power Monitor" icon on the desktop,
+or by running `power-monitor` in the terminal.

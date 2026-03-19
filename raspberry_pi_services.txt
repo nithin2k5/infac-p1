@@ -1,0 +1,23 @@
+================================================================================
+                POWER MONITOR - BACKGROUND SERVICES
+================================================================================
+
+1. WHAT RUNS IN THE BACKGROUND?
+-------------------------------
+The `power-monitor` service is designed to run 24/7 automatically whenever the Raspberry Pi is turned on.
+It continuously monitors the hardware GPIO pins for power events (EB, Gen1, Gen2) and records these events directly to the MySQL database.
+The desktop application reads from this MySQL database so that the data can be visualized.
+
+2. SERVICE MANAGEMENT COMMANDS
+------------------------------
+Check Status:  sudo systemctl status power-monitor
+View Live Log: sudo journalctl -u power-monitor -f
+Start Service: sudo systemctl start power-monitor
+Stop Service:  sudo systemctl stop power-monitor
+Restart:       sudo systemctl restart power-monitor
+
+3. ALIAS COMMANDS (Shortcuts)
+-----------------------------
+power-monitor-status → Check service status
+power-monitor-logs   → View live service logs
+power-monitor        → Open GUI visualization
