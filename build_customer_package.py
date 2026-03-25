@@ -115,6 +115,7 @@ def main():
     print_step(4, 7, "Copying configuration and documentation...")
     files_to_copy = [
         'config.example.json',
+        '.env.example',
         'requirements.txt',
         'LICENSE',
         'INSTALL.txt',
@@ -184,28 +185,28 @@ echo -e "${GREEN}[OK]${NC} Installed to: $INSTALL_DIR"
 
 # Step 2: Install system dependencies
 echo -e "${BLUE}[2/9]${NC} Installing system dependencies..."
-apt-get update -qq
-apt-get install -y -qq python3-pip python3-tk mysql-server > /dev/null 2>&1
+apt-get update
+apt-get install -y python3-pip python3-tk mysql-server
 echo -e "${GREEN}[OK]${NC} System dependencies installed"
 
 # Step 3: Install Python packages
 echo -e "${BLUE}[3/9]${NC} Installing Python packages..."
-pip3 install -q -r "$INSTALL_DIR/requirements.txt"
-pip3 install -q RPi.GPIO python-dotenv
+pip3 install -q --break-system-packages -r "$INSTALL_DIR/requirements.txt"
+pip3 install -q --break-system-packages RPi.GPIO python-dotenv
 echo -e "${GREEN}[OK]${NC} Python packages installed"
 
-# Step 4: Run MySQL configuration wizard
-echo -e "${BLUE}[4/9]${NC} Configuring MySQL..."
-python3 "$INSTALL_DIR/configure_mysql.py"
-echo -e "${GREEN}[OK]${NC} MySQL configured"
-
-# Step 5: Setup configuration
-echo -e "${BLUE}[5/9]${NC} Setting up application configuration..."
+# Step 4: Setup configuration
+echo -e "${BLUE}[4/9]${NC} Setting up application configuration..."
 if [ ! -f "$INSTALL_DIR/config.json" ]; then
     cp "$INSTALL_DIR/config.example.json" "$INSTALL_DIR/config.json"
     chown $ACTUAL_USER:$ACTUAL_USER "$INSTALL_DIR/config.json"
 fi
 echo -e "${GREEN}[OK]${NC} Configuration ready"
+
+# Step 5: Run MySQL configuration wizard
+echo -e "${BLUE}[5/9]${NC} Configuring MySQL..."
+python3 "$INSTALL_DIR/configure_mysql.py"
+echo -e "${GREEN}[OK]${NC} MySQL configured"
 
 # Step 6: Install service
 echo -e "${BLUE}[6/9]${NC} Installing background service..."
