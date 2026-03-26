@@ -6,8 +6,10 @@ matplotlib>=3.5.0
 # Email Notifications (optional)
 # No extra packages needed (smtplib is built-in)
 
-# Raspberry Pi GPIO (only needed on Raspberry Pi)
-# RPi.GPIO>=0.7.1
+# Raspberry Pi GPIO
+# For Pi 5: use gpiod (recommended) or lgpio
+# For Pi 4 and older: use RPi.GPIO
+# Installer will handle the appropriate library for your hardware
 
 # Note: Tkinter is part of Python's standard library but may require system packages:
 # - Ubuntu/Debian: sudo apt-get install python3-tk

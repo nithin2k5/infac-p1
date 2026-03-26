@@ -7,13 +7,29 @@ import threading
 
 logger = logging.getLogger(__name__)
 
-# Try to import RPi.GPIO
+GPIO = None
+GPIO_AVAILABLE = False
+GPIO_BACKEND = None
+
 try:
     import RPi.GPIO as GPIO
     GPIO_AVAILABLE = True
-except ImportError:
-    GPIO_AVAILABLE = False
-    logger.warning("RPi.GPIO not available. GPIO reading will be simulated.")
+    GPIO_BACKEND = "RPi.GPIO"
+except (ImportError, RuntimeError):
+    try:
+        import gpiod
+        GPIO_AVAILABLE = True
+        GPIO_BACKEND = "gpiod"
+        logger.info("Using gpiod backend (Raspberry Pi 5 compatible)")
+    except ImportError:
+        try:
+            import lgpio
+            GPIO_AVAILABLE = True
+            GPIO_BACKEND = "lgpio"
+            logger.info("Using lgpio backend (Raspberry Pi 5 compatible)")
+        except ImportError:
+            GPIO_AVAILABLE = False
+            logger.warning("No GPIO library available. Install gpiod or lgpio for Pi 5")
 
 
 class GPIOReader:
@@ -66,12 +82,13 @@ class GPIOReader:
         
         self.running = False
         self.monitor_thread = None
+        self.gpio_backend = GPIO_BACKEND
+        self.chip = None
+        self.lines = None
         
-        # Initialize GPIO if available
         if not GPIO_AVAILABLE:
             raise ImportError(
-                "RPi.GPIO not available. This module requires Raspberry Pi hardware. "
-                "Install with: pip3 install RPi.GPIO"
+                "No GPIO library available. For Raspberry Pi 5, install: pip3 install gpiod"
             )
         
         self._setup_gpio()
@@ -79,21 +96,34 @@ class GPIOReader:
     def _setup_gpio(self) -> None:
         """Setup GPIO pins for reading."""
         try:
-            # Set GPIO mode to BCM (Broadcom chip-specific pin numbers)
-            GPIO.setmode(GPIO.BCM)
+            if GPIO_BACKEND == "RPi.GPIO":
+                GPIO.setmode(GPIO.BCM)
+                GPIO.setwarnings(False)
+                for input_id, config in self.pin_config.items():
+                    pin = config['pin']
+                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+                    logger.info(f"Configured GPIO pin {pin} for {config['name']}")
+                    
+            elif GPIO_BACKEND == "gpiod":
+                import gpiod
+                self.chip = gpiod.Chip('gpiochip4')
+                self.lines = {}
+                for input_id, config in self.pin_config.items():
+                    pin = config['pin']
+                    line = self.chip.get_line(pin)
+                    line.request(consumer="power-monitor", type=gpiod.LINE_REQ_DIR_IN, flags=gpiod.LINE_REQ_FLAG_BIAS_PULL_DOWN)
+                    self.lines[input_id] = line
+                    logger.info(f"Configured GPIO pin {pin} for {config['name']} (gpiod)")
+                    
+            elif GPIO_BACKEND == "lgpio":
+                import lgpio
+                self.chip = lgpio.gpiochip_open(4)
+                for input_id, config in self.pin_config.items():
+                    pin = config['pin']
+                    lgpio.gpio_claim_input(self.chip, pin, lgpio.SET_PULL_DOWN)
+                    logger.info(f"Configured GPIO pin {pin} for {config['name']} (lgpio)")
             
-            # Disable warnings
-            GPIO.setwarnings(False)
-            
-            # Setup pins as INPUT with pull-down resistors
-            # When power is ON, pin will be HIGH (1)
-            # When power is OFF, pin will be LOW (0)
-            for input_id, config in self.pin_config.items():
-                pin = config['pin']
-                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-                logger.info(f"Configured GPIO pin {pin} for {config['name']}")
-            
-            logger.info("GPIO setup completed successfully")
+            logger.info(f"GPIO setup completed successfully using {GPIO_BACKEND}")
             
         except Exception as e:
             logger.error(f"Error setting up GPIO: {e}")
@@ -114,16 +144,26 @@ class GPIOReader:
             return None
         
         if not GPIO_AVAILABLE:
-            logger.error("RPi.GPIO not available. This module requires Raspberry Pi hardware.")
+            logger.error("No GPIO library available")
             return None
         
         config = self.pin_config[input_id]
         pin = config['pin']
         
         try:
-            # Read actual GPIO pin
-            state = GPIO.input(pin)
-            return 1 if state == GPIO.HIGH else 0
+            if GPIO_BACKEND == "RPi.GPIO":
+                state = GPIO.input(pin)
+                return 1 if state == GPIO.HIGH else 0
+                
+            elif GPIO_BACKEND == "gpiod":
+                line = self.lines[input_id]
+                state = line.get_value()
+                return 1 if state == 1 else 0
+                
+            elif GPIO_BACKEND == "lgpio":
+                import lgpio
+                state = lgpio.gpio_read(self.chip, pin)
+                return 1 if state == 1 else 0
                 
         except Exception as e:
             logger.error(f"Error reading GPIO pin {pin} for {input_id}: {e}")
@@ -228,7 +268,18 @@ class GPIOReader:
         
         if GPIO_AVAILABLE:
             try:
-                GPIO.cleanup()
+                if GPIO_BACKEND == "RPi.GPIO":
+                    GPIO.cleanup()
+                elif GPIO_BACKEND == "gpiod":
+                    if self.lines:
+                        for line in self.lines.values():
+                            line.release()
+                    if self.chip:
+                        self.chip.close()
+                elif GPIO_BACKEND == "lgpio":
+                    import lgpio
+                    if self.chip is not None:
+                        lgpio.gpiochip_close(self.chip)
                 logger.info("GPIO cleanup completed")
             except Exception as e:
                 logger.error(f"Error during GPIO cleanup: {e}")
