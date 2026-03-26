@@ -12,24 +12,22 @@ GPIO_AVAILABLE = False
 GPIO_BACKEND = None
 
 try:
-    import RPi.GPIO as GPIO
+    import gpiod
     GPIO_AVAILABLE = True
-    GPIO_BACKEND = "RPi.GPIO"
-except (ImportError, RuntimeError):
+    GPIO_BACKEND = "gpiod"
+except ImportError:
     try:
-        import gpiod
+        import lgpio
         GPIO_AVAILABLE = True
-        GPIO_BACKEND = "gpiod"
-        logger.info("Using gpiod backend (Raspberry Pi 5 compatible)")
+        GPIO_BACKEND = "lgpio"
     except ImportError:
         try:
-            import lgpio
+            import RPi.GPIO as GPIO
             GPIO_AVAILABLE = True
-            GPIO_BACKEND = "lgpio"
-            logger.info("Using lgpio backend (Raspberry Pi 5 compatible)")
-        except ImportError:
+            GPIO_BACKEND = "RPi.GPIO"
+        except (ImportError, RuntimeError):
             GPIO_AVAILABLE = False
-            logger.warning("No GPIO library available. Install gpiod or lgpio for Pi 5")
+            logger.warning("No GPIO library available")
 
 
 class GPIOReader:
