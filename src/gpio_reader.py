@@ -104,16 +104,14 @@ class GPIOReader:
                     
             elif GPIO_BACKEND == "gpiod":
                 import gpiod
-                from gpiod.line import Direction, Bias
                 self.chip = gpiod.Chip('/dev/gpiochip4')
                 self.lines = {}
                 for input_id, config in self.pin_config.items():
                     pin = config['pin']
-                    line_settings = gpiod.LineSettings(direction=Direction.INPUT, bias=Bias.PULL_DOWN)
-                    line_config = gpiod.LineConfig({pin: line_settings})
-                    line_request = self.chip.request_lines(consumer="power-monitor", config=line_config)
-                    self.lines[input_id] = {'request': line_request, 'offset': pin}
-                    logger.info(f"Configured GPIO pin {pin} for {config['name']} (gpiod)")
+                    line = self.chip.get_line(pin)
+                    line.request(consumer="power-monitor", type=gpiod.LINE_REQ_DIR_IN, flags=gpiod.LINE_REQ_FLAG_BIAS_PULL_DOWN)
+                    self.lines[input_id] = line
+                    logger.info(f"Configured GPIO pin {pin} for {config['name']} (gpiod v1)")
                     
             elif GPIO_BACKEND == "lgpio":
                 import lgpio
@@ -156,8 +154,8 @@ class GPIOReader:
                 return 1 if state == GPIO.HIGH else 0
                 
             elif GPIO_BACKEND == "gpiod":
-                line_info = self.lines[input_id]
-                state = line_info['request'].get_value(line_info['offset'])
+                line = self.lines[input_id]
+                state = line.get_value()
                 return 1 if state == 1 else 0
                 
             elif GPIO_BACKEND == "lgpio":
@@ -272,8 +270,8 @@ class GPIOReader:
                     GPIO.cleanup()
                 elif GPIO_BACKEND == "gpiod":
                     if self.lines:
-                        for line_info in self.lines.values():
-                            line_info['request'].release()
+                        for line in self.lines.values():
+                            line.release()
                     if self.chip:
                         self.chip.close()
                 elif GPIO_BACKEND == "lgpio":
