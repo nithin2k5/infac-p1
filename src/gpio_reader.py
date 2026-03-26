@@ -104,7 +104,7 @@ class GPIOReader:
                     
             elif GPIO_BACKEND == "gpiod":
                 import gpiod
-                self.chip = gpiod.Chip('gpiochip4')
+                self.chip = gpiod.Chip('/dev/gpiochip4')
                 self.lines = {}
                 for input_id, config in self.pin_config.items():
                     pin = config['pin']
