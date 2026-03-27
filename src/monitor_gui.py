@@ -95,22 +95,18 @@ class MonitorGUI:
         self.root = tk.Tk()
         window_width = ui_config.get("window_width", 1200)
         window_height = ui_config.get("window_height", 800)
-        self.root.geometry(f"{window_width}x{window_height}")
         self.root.title("Raspberry Pi Monitor - Power Status & Events")
+        self.root.minsize(900, 600)
+        self.root.geometry(f"{window_width}x{window_height}")
+        self.root.attributes("-fullscreen", False)
+        self._apply_maximized_window()
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         
-        # Try to start in full-screen / maximized mode
-        try:
-            # Windows / some platforms
-            self.root.state("zoomed")
-        except Exception:
-            try:
-                # Fallback: set to full-screen if zoomed state unsupported
-                self.root.attributes("-fullscreen", True)
-            except Exception:
-                # Last resort: manually resize to screen resolution
-                screen_w = self.root.winfo_screenwidth()
-                screen_h = self.root.winfo_screenheight()
-                self.root.geometry(f"{screen_w}x{screen_h}")
+        menubar = tk.Menu(self.root)
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Exit", command=self._on_close)
+        menubar.add_cascade(label="File", menu=file_menu)
+        self.root.config(menu=menubar)
         
         # Setup UI
         self._build_ui()
@@ -120,6 +116,33 @@ class MonitorGUI:
         
         # Load initial data
         self.refresh_data()
+    
+    def _apply_maximized_window(self) -> None:
+        try:
+            self.root.state("zoomed")
+            return
+        except tk.TclError:
+            pass
+        try:
+            self.root.attributes("-zoomed", True)
+            return
+        except tk.TclError:
+            pass
+        try:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            self.root.geometry(f"{sw}x{sh}+0+0")
+        except Exception:
+            pass
+    
+    def _on_close(self) -> None:
+        if self.auto_refresh_timer:
+            self.auto_refresh_timer.cancel()
+            self.auto_refresh_timer = None
+        if self.dashboard_auto_refresh_timer:
+            self.dashboard_auto_refresh_timer.cancel()
+            self.dashboard_auto_refresh_timer = None
+        self.root.destroy()
     
     def _build_ui(self) -> None:
         """Build the main UI components with two-page interface."""
@@ -204,7 +227,7 @@ class MonitorGUI:
         )
         indicators_section.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
         
-        # Container for status cards (single row with 4 compact indicators)
+        # Container for status cards (single row: EB + two generators)
         cards_container = ttk.Frame(indicators_section)
         cards_container.pack(fill=tk.BOTH, expand=True)
         
@@ -214,16 +237,13 @@ class MonitorGUI:
             ('eb', 'EB (Electricity Board)', 'Main Power'),
             ('gen1', 'GEN1', 'Generator 1'),
             ('gen2', 'GEN2', 'Generator 2'),
-            ('gen3', 'GEN3', 'Generator 3')
         ]
         
-        # Four indicators in a single line
         for col, (input_id, title, subtitle) in enumerate(inputs):
             # Status card frame (reduced padding for smaller size)
             card_frame = ttk.LabelFrame(cards_container, text=title, padding="10")
             card_frame.grid(row=0, column=col, padx=10, pady=10, sticky="nsew")
             
-            # Configure grid weights so all four share width evenly
             cards_container.columnconfigure(col, weight=1)
         
             # Build status card
@@ -237,7 +257,6 @@ class MonitorGUI:
         )
         graph_section.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
         
-        # Build the combined graph for all 4 inputs
         self._build_graph_panel(graph_section)
         
         # Bottom controls
@@ -324,7 +343,7 @@ class MonitorGUI:
         }
     
     def _build_graph_panel(self, parent) -> None:
-        """Build graph panel showing state history for all 4 inputs combined."""
+        """Build graph panel showing state history for EB, GEN1, GEN2."""
         if not MATPLOTLIB_AVAILABLE:
             ttk.Label(
                 parent,
@@ -361,18 +380,15 @@ class MonitorGUI:
             end_time = datetime.now().timestamp()
             start_time = end_time - (4 * 3600)  # Last 4 hours
             
-            inputs = ['eb', 'gen1', 'gen2', 'gen3']
-            input_names = {'eb': 'EB', 'gen1': 'GEN1', 'gen2': 'GEN2', 'gen3': 'GEN3'}
-            # Distinct colors for each power input so they are easy to differentiate
+            inputs = ['eb', 'gen1', 'gen2']
+            input_names = {'eb': 'EB', 'gen1': 'GEN1', 'gen2': 'GEN2'}
             colors = {
-                'eb': '#0077ff',    # EB - blue
-                'gen1': '#00aa55',  # GEN1 - green
-                'gen2': '#ff8800',  # GEN2 - orange
-                'gen3': '#cc0000',  # GEN3 - red
+                'eb': '#0077ff',
+                'gen1': '#00aa55',
+                'gen2': '#ff8800',
             }
-            linestyles = {'eb': '-', 'gen1': '--', 'gen2': '-.', 'gen3': ':'}
-            # Map each input to a vertical position on the Y-axis
-            y_positions = {'eb': 3, 'gen1': 2, 'gen2': 1, 'gen3': 0}
+            linestyles = {'eb': '-', 'gen1': '--', 'gen2': '-.'}
+            y_positions = {'eb': 2, 'gen1': 1, 'gen2': 0}
             
             # Clear previous plot
             self.graph_ax.clear()
@@ -425,11 +441,10 @@ class MonitorGUI:
             # Configure axis for time vs inputs
             self.graph_ax.set_xlabel('Time', fontsize=10)
             self.graph_ax.set_ylabel('Inputs', fontsize=10)
-            self.graph_ax.set_title('EB / GEN1 / GEN2 / GEN3 Timeline (Last 4 Hours)', fontsize=12, fontweight='bold')
-            # Y-axis shows one row per input
-            self.graph_ax.set_ylim(-0.5, 3.5)
-            self.graph_ax.set_yticks([0, 1, 2, 3])
-            self.graph_ax.set_yticklabels(['GEN3', 'GEN2', 'GEN1', 'EB'])
+            self.graph_ax.set_title('EB / GEN1 / GEN2 Timeline (Last 4 Hours)', fontsize=12, fontweight='bold')
+            self.graph_ax.set_ylim(-0.5, 2.5)
+            self.graph_ax.set_yticks([0, 1, 2])
+            self.graph_ax.set_yticklabels(['GEN2', 'GEN1', 'EB'])
             self.graph_ax.grid(True, alpha=0.3, linestyle='--')
             
             if has_data:
@@ -632,7 +647,7 @@ class MonitorGUI:
         self.input_combo = ttk.Combobox(
             filters_frame,
             textvariable=self.input_var,
-            values=["All", "eb", "gen1", "gen2", "gen3"],
+            values=["All", "eb", "gen1", "gen2"],
             state="readonly",
             width=12
         )
@@ -1027,21 +1042,27 @@ class MonitorGUI:
             latest_states = self.db.get_latest_states()
             active_outage = self.db.get_active_outage()
             
-            # Check if EB is LOW
-            eb_state = latest_states.get('eb', {}).get('state', 1)
+            eb_info = latest_states.get('eb')
+            if not eb_info:
+                self.outage_label.config(text="", background="")
+                return
+            eb_state = eb_info.get('state')
+            if eb_state is None:
+                self.outage_label.config(text="", background="")
+                return
             
             if eb_state == 0 or active_outage:
                 if active_outage:
                     duration = datetime.now().timestamp() - active_outage['outage_start']
                     duration_str = self._format_duration(duration)
                     self.outage_label.config(
-                        text=f"⚠️ ACTIVE OUTAGE - Duration: {duration_str}",
+                        text=f"ACTIVE OUTAGE - Duration: {duration_str}",
                         background="#ffcccc",
                         foreground="#cc0000"
                     )
                 else:
                     self.outage_label.config(
-                        text="⚠️ EB POWER CUT DETECTED",
+                        text="EB POWER CUT DETECTED",
                         background="#ffcccc",
                         foreground="#cc0000"
                     )
