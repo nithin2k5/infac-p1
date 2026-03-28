@@ -11,6 +11,7 @@
     "enabled": true,
     "poll_interval": 0.5,
     "debounce_time": 0.1,
+    "status_pin": 24,
     "pins": {
       "eb": 17,
       "gen1": 27,

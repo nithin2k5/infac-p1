@@ -8,7 +8,7 @@ from typing import Optional
 import threading
 
 from .config import Config  # type: ignore
-from .gpio_reader import GPIOReader  # type: ignore
+from .gpio_reader import GPIOReader, StatusLED  # type: ignore
 from .db_writer import DatabaseWriter  # type: ignore
 from .email_sender import EmailSender  # type: ignore
 
@@ -44,10 +44,14 @@ class BackgroundMonitor:
         # Initialize GPIO reader
         self.gpio_reader = GPIOReader(
             on_state_change=self._handle_state_change,
-            poll_interval=0.5,  # Check every 0.5 seconds
-            debounce_time=0.1   # 100ms debounce
+            poll_interval=0.5,
+            debounce_time=0.1
         )
-        
+
+        # Status LED: HIGH = service running, LOW = stopped/crashed
+        status_pin = self.config.get("gpio.status_pin", StatusLED.DEFAULT_PIN)
+        self.status_led = StatusLED(pin=int(status_pin))
+
         # Initialize Email sender
         self.email = EmailSender(self.config)
         
@@ -165,6 +169,10 @@ class BackgroundMonitor:
         
         # Start GPIO monitoring
         self.gpio_reader.start_monitoring()
+
+        # Signal that service is running
+        self.status_led.on()
+        logger.info(f"Status LED ON (GPIO {self.status_led.pin})")
         
         logger.info("\n✓ Monitor service started successfully")
         logger.info("Monitoring power status 24/7...")
@@ -195,9 +203,12 @@ class BackgroundMonitor:
         logger.info("Stopping background monitor service...")
         self.running = False
         
+        # Turn off status LED first so it goes LOW even if cleanup crashes
+        self.status_led.cleanup()
+
         # Stop GPIO monitoring
         self.gpio_reader.cleanup()
-        
+
         # Close database connection
         self.db_writer.close()
         

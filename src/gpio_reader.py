@@ -307,6 +307,98 @@ class GPIOReader:
         }
 
 
+class StatusLED:
+    """
+    Controls a single GPIO output pin as a service status indicator.
+    HIGH when service is running, LOW when stopped or crashed.
+    Default pin: GPIO 24 (physical Pin 18).
+    """
+
+    DEFAULT_PIN = 24
+
+    def __init__(self, pin: int = DEFAULT_PIN):
+        self.pin = pin
+        self._chip = None
+        self._req = None
+        self._available = GPIO_AVAILABLE
+        self._setup()
+
+    def _setup(self) -> None:
+        if not self._available:
+            return
+        try:
+            if GPIO_BACKEND == "RPi.GPIO":
+                GPIO.setmode(GPIO.BCM)
+                GPIO.setwarnings(False)
+                GPIO.setup(self.pin, GPIO.OUT, initial=GPIO.LOW)
+
+            elif GPIO_BACKEND == "gpiod":
+                import gpiod
+                self._chip = gpiod.Chip('/dev/gpiochip4')
+                self._req = self._chip.request_lines(
+                    consumer="power-monitor-status",
+                    config={
+                        (self.pin,): gpiod.LineSettings(
+                            direction=gpiod.line.Direction.OUTPUT,
+                            output_value=gpiod.line.Value.INACTIVE
+                        )
+                    }
+                )
+
+            elif GPIO_BACKEND == "lgpio":
+                import lgpio
+                self._chip = lgpio.gpiochip_open(4)
+                lgpio.gpio_claim_output(self._chip, self.pin, 0)
+
+            logger.info(f"Status LED configured on GPIO {self.pin} ({GPIO_BACKEND})")
+        except Exception as e:
+            logger.warning(f"Status LED setup failed (non-fatal): {e}")
+            self._available = False
+
+    def on(self) -> None:
+        if not self._available:
+            return
+        try:
+            if GPIO_BACKEND == "RPi.GPIO":
+                GPIO.output(self.pin, GPIO.HIGH)
+            elif GPIO_BACKEND == "gpiod" and self._req:
+                import gpiod
+                self._req.set_value(self.pin, gpiod.line.Value.ACTIVE)
+            elif GPIO_BACKEND == "lgpio" and self._chip is not None:
+                import lgpio
+                lgpio.gpio_write(self._chip, self.pin, 1)
+        except Exception as e:
+            logger.warning(f"Status LED on() failed: {e}")
+
+    def off(self) -> None:
+        if not self._available:
+            return
+        try:
+            if GPIO_BACKEND == "RPi.GPIO":
+                GPIO.output(self.pin, GPIO.LOW)
+            elif GPIO_BACKEND == "gpiod" and self._req:
+                import gpiod
+                self._req.set_value(self.pin, gpiod.line.Value.INACTIVE)
+            elif GPIO_BACKEND == "lgpio" and self._chip is not None:
+                import lgpio
+                lgpio.gpio_write(self._chip, self.pin, 0)
+        except Exception as e:
+            logger.warning(f"Status LED off() failed: {e}")
+
+    def cleanup(self) -> None:
+        self.off()
+        try:
+            if GPIO_BACKEND == "gpiod" and self._req:
+                self._req.release()
+            if GPIO_BACKEND == "gpiod" and self._chip:
+                self._chip.close()
+            if GPIO_BACKEND == "lgpio" and self._chip is not None:
+                import lgpio
+                lgpio.gpiochip_close(self._chip)
+        except Exception:
+            pass
+
+
 # Standalone test function
 def test_gpio_reader():
     """Test GPIO reader functionality."""
