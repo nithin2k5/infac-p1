@@ -207,16 +207,12 @@ class MonitorGUI:
           - Status indicators area pinned to ~40% of the page height
           - Combined graph for all 4 power inputs in the remaining space
         """
-        # Configure grid so indicators take ~40% and graph ~60%
         self.dashboard_frame.columnconfigure(0, weight=1)
-        # Title row (fixed height)
         self.dashboard_frame.rowconfigure(0, weight=0)
-        # Indicators row (~40%)
         self.dashboard_frame.rowconfigure(1, weight=2)
-        # Graph row (~60%)
-        self.dashboard_frame.rowconfigure(2, weight=3)
-        # Controls row (fixed)
-        self.dashboard_frame.rowconfigure(3, weight=0)
+        self.dashboard_frame.rowconfigure(2, weight=0)
+        self.dashboard_frame.rowconfigure(3, weight=3)
+        self.dashboard_frame.rowconfigure(4, weight=0)
         
         # Title
         title_label = ttk.Label(
@@ -257,19 +253,28 @@ class MonitorGUI:
             # Build status card
             self._build_status_card(card_frame, input_id, subtitle)
         
-        # ========== SECTION 2: COMBINED GRAPH (BOTTOM ~60%) ==========
+        # ========== SECTION 2: DAILY SUMMARY ==========
+        summary_section = ttk.LabelFrame(
+            self.dashboard_frame,
+            text="Today's Summary",
+            padding="8"
+        )
+        summary_section.grid(row=2, column=0, sticky="ew", pady=(0, 6))
+        self._build_summary_section(summary_section)
+
+        # ========== SECTION 3: COMBINED GRAPH ==========
         graph_section = ttk.LabelFrame(
             self.dashboard_frame,
             text="Power Inputs History (All Sources)",
             padding="10"
         )
-        graph_section.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
-        
+        graph_section.grid(row=3, column=0, sticky="nsew", pady=(0, 10))
+
         self._build_graph_panel(graph_section)
-        
+
         # Bottom controls
         controls_frame = ttk.Frame(self.dashboard_frame)
-        controls_frame.grid(row=3, column=0, sticky="ew", pady=(0, 5))
+        controls_frame.grid(row=4, column=0, sticky="ew", pady=(0, 5))
         
         # Last updated label
         self.last_updated_label = ttk.Label(
@@ -377,7 +382,71 @@ class MonitorGUI:
         
         # Store graph reference
         self.graph_frame = parent
-    
+
+    def _build_summary_section(self, parent) -> None:
+        """Build the today's summary table inside the given LabelFrame."""
+        from datetime import datetime as _dt
+        hour = 6
+        now = _dt.now()
+        range_text = f"Today  {hour}:00 AM  →  {now.strftime('%I:%M %p')}"
+
+        ttk.Label(parent, text=range_text, font=("Arial", 9), foreground="gray").grid(
+            row=0, column=0, columnspan=5, sticky="w", pady=(0, 6)
+        )
+
+        headers = ["", "Power ON Duration", "Power OFF Duration", "No. of Power Cuts"]
+        col_widths = [8, 22, 22, 18]
+        for c, (h, w) in enumerate(zip(headers, col_widths)):
+            ttk.Label(
+                parent, text=h,
+                font=("Arial", 9, "bold"),
+                width=w,
+                anchor="center"
+            ).grid(row=1, column=c, padx=6, pady=2, sticky="ew")
+
+        self._summary_rows = {}
+        row_labels = [("eb", "EB"), ("gen1", "GEN1"), ("gen2", "GEN2"), ("gen3", "GEN3")]
+        for r, (input_id, label) in enumerate(row_labels, start=2):
+            ttk.Label(parent, text=label, font=("Arial", 9, "bold"), width=8, anchor="w").grid(
+                row=r, column=0, padx=(10, 4), pady=2, sticky="w"
+            )
+            on_var = tk.StringVar(value="-")
+            off_var = tk.StringVar(value="-")
+            cuts_var = tk.StringVar(value="-")
+
+            ttk.Label(parent, textvariable=on_var, font=("Arial", 9), width=22, anchor="center",
+                      foreground="#009933").grid(row=r, column=1, padx=6, pady=2, sticky="ew")
+            ttk.Label(parent, textvariable=off_var, font=("Arial", 9), width=22, anchor="center",
+                      foreground="#cc0000").grid(row=r, column=2, padx=6, pady=2, sticky="ew")
+            ttk.Label(parent, textvariable=cuts_var, font=("Arial", 9), width=18, anchor="center").grid(
+                row=r, column=3, padx=6, pady=2, sticky="ew"
+            )
+            self._summary_rows[input_id] = (on_var, off_var, cuts_var)
+
+        for c in range(4):
+            parent.columnconfigure(c, weight=1 if c > 0 else 0)
+
+    def _format_hrs(self, seconds: float) -> str:
+        """Format seconds as H:MM Hrs."""
+        seconds = abs(seconds)
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        return f"{h}:{m:02d} Hrs"
+
+    def _update_summary(self) -> None:
+        """Refresh the daily summary labels."""
+        if not hasattr(self, '_summary_rows'):
+            return
+        try:
+            data = self.db.get_daily_summary(since_hour=6)
+            for input_id, (on_var, off_var, cuts_var) in self._summary_rows.items():
+                d = data.get(input_id, {})
+                on_var.set(self._format_hrs(d.get('on_seconds', 0)))
+                off_var.set(self._format_hrs(d.get('off_seconds', 0)))
+                cuts_var.set(str(d.get('power_cuts', 0)))
+        except Exception as e:
+            logger.error(f"Error updating summary: {e}")
+
     def _update_graph(self) -> None:
         """Update the state history graph."""
         if not MATPLOTLIB_AVAILABLE or not hasattr(self, 'graph_ax'):
@@ -902,7 +971,10 @@ class MonitorGUI:
             
             # Update graph
             self._update_graph()
-            
+
+            # Update daily summary
+            self._update_summary()
+
             # Update EB history (only if on EB history page)
             if hasattr(self, 'eb_history_tree'):
                 self._load_eb_history()

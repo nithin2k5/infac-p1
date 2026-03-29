@@ -538,3 +538,78 @@ class DatabaseReader:
             if conn and conn.is_connected():
                 conn.close()
 
+    def get_daily_summary(self, since_hour: int = 6) -> Dict[str, Dict]:
+        """
+        Return today's ON/OFF durations and power-cut count for each input
+        since `since_hour` (default 6 AM) up to now.
+        """
+        import time as _time
+        from datetime import datetime as _dt, date as _date
+
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            today = _date.today()
+            start_ts = _dt(today.year, today.month, today.day, since_hour).timestamp()
+            now_ts = _time.time()
+
+            inputs = ['eb', 'gen1', 'gen2', 'gen3']
+            result = {}
+
+            for input_id in inputs:
+                cursor.execute("""
+                    SELECT state FROM events
+                    WHERE input_id = %s AND timestamp < %s
+                    ORDER BY timestamp DESC LIMIT 1
+                """, (input_id, start_ts))
+                row = cursor.fetchone()
+                initial_state = row['state'] if row else 1
+
+                cursor.execute("""
+                    SELECT state, timestamp FROM events
+                    WHERE input_id = %s AND timestamp >= %s AND timestamp <= %s
+                    ORDER BY timestamp ASC
+                """, (input_id, start_ts, now_ts))
+                events = cursor.fetchall()
+
+                on_secs = 0.0
+                off_secs = 0.0
+                power_cuts = 0
+                cur_state = initial_state
+                cur_ts = start_ts
+
+                for ev in events:
+                    delta = ev['timestamp'] - cur_ts
+                    if cur_state == 1:
+                        on_secs += delta
+                    else:
+                        off_secs += delta
+                    if ev['state'] == 0 and cur_state == 1:
+                        power_cuts += 1
+                    cur_state = ev['state']
+                    cur_ts = ev['timestamp']
+
+                delta = now_ts - cur_ts
+                if cur_state == 1:
+                    on_secs += delta
+                else:
+                    off_secs += delta
+
+                result[input_id] = {
+                    'on_seconds': max(on_secs, 0),
+                    'off_seconds': max(off_secs, 0),
+                    'power_cuts': power_cuts,
+                    'since_hour': since_hour,
+                }
+
+            return result
+
+        except Error as e:
+            logger.error(f"Error getting daily summary: {e}")
+            raise
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+
