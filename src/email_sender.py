@@ -143,29 +143,26 @@ class EmailSender:
         if not bypass_rate_limit and not self._check_rate_limit():
             return False
 
-        eb_off    = self._fmt_time(outage.get('eb_off_time'))
-        eb_on     = self._fmt_time(outage.get('eb_on_time'))
-        eb_total  = self._fmt_duration(outage.get('eb_off_time'), outage.get('eb_on_time'))
+        eb_off = self._fmt_time(outage.get('eb_off_time'))
+        eb_on = self._fmt_time(outage.get('eb_on_time'))
+        eb_total = self._fmt_duration(outage.get('eb_off_time'), outage.get('eb_on_time'))
 
-        dg_lines = []
+        timing_lines = [
+            f"EB:   Switched OFF @ {eb_off} & Switched ON @ {eb_on} - Total Hrs {eb_total}",
+        ]
         for idx, key in enumerate(['gen1', 'gen2', 'gen3'], start=1):
             g = outage.get(key, {})
-            on_t  = g.get('on')
+            on_t = g.get('on')
             off_t = g.get('off')
-            on_s   = self._fmt_time(on_t)
-            off_s  = self._fmt_time(off_t)
-            total  = self._fmt_duration(on_t, off_t)
-            prefix = f"DG - {idx}" if idx == 1 else f"DG-{idx} " if idx == 2 else f"DG -{idx}"
-            dg_lines.append(
-                f"{prefix} is Switched ON  @  {on_s} & Switched OFF @ {off_s} Total Hrs {total}"
+            on_s = self._fmt_time(on_t)
+            off_s = self._fmt_time(off_t)
+            total = self._fmt_duration(on_t, off_t)
+            timing_lines.append(
+                f"DG-{idx}: Switched ON @ {on_s} & Switched OFF @ {off_s} - Total Hrs {total}"
             )
 
         reason_text = outage.get('reason') or "to be updated"
-        reason_line = (
-            f"Reason : {reason_text}"
-            f" ( External Power Cut  / Internal Trip / Fuse Blown )"
-            f"  ( OR )  ( to be updated )"
-        )
+        reason_line = f"Reason: {reason_text}"
 
         event_dt = self._fmt_time(outage.get('eb_off_time') or time.time())
         subject = f"Power Cut Information - {event_dt}"
@@ -173,9 +170,8 @@ class EmailSender:
         body = (
             "Greetings!!\n\n"
             "Sub: Power Cut Information -Reg\n\n"
-            f"EB Power Switched OFF @  {eb_off} & Switched ON @ {eb_on} Total Hrs {eb_total}\n"
-            + "\n".join(dg_lines)
-            + f"\n\n\n{reason_line}\n\n"
+            + "\n".join(timing_lines)
+            + f"\n\n{reason_line}\n\n"
             "Thank you"
         )
 
