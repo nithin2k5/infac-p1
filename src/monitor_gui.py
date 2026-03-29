@@ -383,17 +383,14 @@ class MonitorGUI:
 
     def _build_summary_section(self, parent) -> None:
         """Build the today's summary table inside the given LabelFrame."""
-        from datetime import datetime as _dt
-        hour = 6
-        now = _dt.now()
-        range_text = f"Today  {hour}:00 AM  →  {now.strftime('%I:%M %p')}"
-
-        ttk.Label(parent, text=range_text, font=("Arial", 9), foreground="gray").grid(
-            row=0, column=0, columnspan=5, sticky="w", pady=(0, 6)
+        self._summary_range_var = tk.StringVar(value="Today  6:00 AM  →  --:-- --")
+        ttk.Label(parent, textvariable=self._summary_range_var,
+                  font=("Arial", 9), foreground="gray").grid(
+            row=0, column=0, columnspan=4, sticky="w", pady=(0, 6)
         )
 
-        headers = ["", "Power ON Duration", "Power OFF Duration", "No. of Power Cuts"]
-        col_widths = [8, 22, 22, 18]
+        headers = ["", "Power ON Duration", "Power OFF Duration", "Power Cuts / Activations"]
+        col_widths = [8, 22, 22, 22]
         for c, (h, w) in enumerate(zip(headers, col_widths)):
             ttk.Label(
                 parent, text=h,
@@ -403,22 +400,27 @@ class MonitorGUI:
             ).grid(row=1, column=c, padx=6, pady=2, sticky="ew")
 
         self._summary_rows = {}
-        row_labels = [("eb", "EB"), ("gen1", "GEN1"), ("gen2", "GEN2"), ("gen3", "GEN3")]
+        row_labels = [
+            ("eb",   "EB"),
+            ("gen1", "GEN1"),
+            ("gen2", "GEN2"),
+            ("gen3", "GEN3"),
+        ]
         for r, (input_id, label) in enumerate(row_labels, start=2):
             ttk.Label(parent, text=label, font=("Arial", 9, "bold"), width=8, anchor="w").grid(
                 row=r, column=0, padx=(10, 4), pady=2, sticky="w"
             )
-            on_var = tk.StringVar(value="-")
-            off_var = tk.StringVar(value="-")
+            on_var   = tk.StringVar(value="-")
+            off_var  = tk.StringVar(value="-")
             cuts_var = tk.StringVar(value="-")
 
             ttk.Label(parent, textvariable=on_var, font=("Arial", 9), width=22, anchor="center",
                       foreground="#009933").grid(row=r, column=1, padx=6, pady=2, sticky="ew")
             ttk.Label(parent, textvariable=off_var, font=("Arial", 9), width=22, anchor="center",
                       foreground="#cc0000").grid(row=r, column=2, padx=6, pady=2, sticky="ew")
-            ttk.Label(parent, textvariable=cuts_var, font=("Arial", 9), width=18, anchor="center").grid(
-                row=r, column=3, padx=6, pady=2, sticky="ew"
-            )
+            ttk.Label(parent, textvariable=cuts_var, font=("Arial", 9), width=22,
+                      anchor="center").grid(row=r, column=3, padx=6, pady=2, sticky="ew")
+
             self._summary_rows[input_id] = (on_var, off_var, cuts_var)
 
         for c in range(4):
@@ -436,12 +438,23 @@ class MonitorGUI:
         if not hasattr(self, '_summary_rows'):
             return
         try:
+            from datetime import datetime as _dt
+            now = _dt.now()
+
+            # Update live range text
+            if hasattr(self, '_summary_range_var'):
+                self._summary_range_var.set(
+                    f"Today  6:00 AM  →  {now.strftime('%I:%M %p')}"
+                )
+
             data = self.db.get_daily_summary(since_hour=6)
             for input_id, (on_var, off_var, cuts_var) in self._summary_rows.items():
                 d = data.get(input_id, {})
                 on_var.set(self._format_hrs(d.get('on_seconds', 0)))
                 off_var.set(self._format_hrs(d.get('off_seconds', 0)))
-                cuts_var.set(str(d.get('power_cuts', 0)))
+                # EB shows power cuts; generators show activations
+                count = d.get('power_cuts', 0)
+                cuts_var.set(str(count))
         except Exception as e:
             logger.error(f"Error updating summary: {e}")
 
@@ -1558,10 +1571,12 @@ METADATA
         self.rate_limit_var = tk.StringVar(value=str(self.config.get("email.rate_limit_seconds", 300)))
         ttk.Entry(smtp_frame, textvariable=self.rate_limit_var, width=10).grid(row=6, column=1, sticky="w", pady=5)
         
-        btn_row = ttk.Frame(smtp_frame)
-        btn_row.grid(row=7, column=0, columnspan=2, pady=20)
-        ttk.Button(btn_row, text="Save SMTP Settings", command=self._save_email_settings).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_row, text="Send Test Email", command=self._send_test_email).pack(side=tk.LEFT, padx=5)
+        # Save Button for SMTP
+        ttk.Button(
+            smtp_frame, 
+            text="Save SMTP Settings", 
+            command=self._save_email_settings
+        ).grid(row=7, column=0, columnspan=2, pady=20)
         
         # --- Right Column: Recipient List ---
         recipients_frame = ttk.LabelFrame(self.settings_frame, text="Email Recipients", padding="15")
@@ -1661,27 +1676,6 @@ METADATA
             messagebox.showinfo("Success", "Email settings saved successfully!")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save settings: {e}")
-
-    def _send_test_email(self) -> None:
-        """Send a test email using current saved settings."""
-        from .email_sender import EmailSender
-        try:
-            self._save_email_settings()
-            sender = EmailSender(self.config)
-            success = sender.send_test_email()
-            if success:
-                messagebox.showinfo("Test Email", "Test email sent successfully! Check your inbox.")
-            else:
-                messagebox.showerror(
-                    "Test Email Failed",
-                    "Failed to send test email.\n\nCheck:\n"
-                    "• Email Notifications is enabled\n"
-                    "• SMTP credentials are correct\n"
-                    "• At least one recipient is added\n"
-                    "• App password is used (not regular password) for Gmail"
-                )
-        except Exception as e:
-            messagebox.showerror("Test Email Error", f"Error: {e}")
 
     def _add_recipient(self) -> None:
         """Add a new recipient email address."""

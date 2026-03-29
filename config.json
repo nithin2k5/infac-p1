@@ -11,10 +11,17 @@
     "enabled": true,
     "poll_interval": 0.5,
     "debounce_time": 0.1,
+    "status_pin": 24,
     "pins": {
       "eb": 17,
       "gen1": 27,
-      "gen2": 22
+      "gen2": 22,
+      "gen3": 23
+    },
+    "reason_pins": {
+      "external_power_cut": 5,
+      "internal_trip": 6,
+      "fuse_blown": 13
     }
   },
   "ui": {

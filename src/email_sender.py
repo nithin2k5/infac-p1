@@ -28,36 +28,56 @@ class EmailSender:
         self._load_settings()
 
     def _load_settings(self) -> None:
-        """Load (or reload) settings from config file or environment variables."""
+        """Load (or reload) settings. Priority: ENV vars > config.json > defaults."""
         if self.config:
             try:
                 self.config.load()
             except Exception as e:
                 logger.warning(f"Could not reload config: {e}")
 
-            self.enabled = bool(self.config.get("email.enabled", False))
-            self.rate_limit_seconds = int(self.config.get("email.rate_limit_seconds", 300))
-            self.smtp_server = self.config.get("email.smtp_server", "smtp.gmail.com")
-            self.smtp_port = int(self.config.get("email.smtp_port", 587))
-            self.smtp_username = self.config.get("email.smtp_username", "") or ""
-            self.smtp_password = self.config.get("email.smtp_password", "") or ""
-            self.email_from = self.config.get("email.from", self.smtp_username) or self.smtp_username
+        env_enabled = os.getenv("EMAIL_ENABLED")
+        self.enabled = (
+            env_enabled.lower() == "true" if env_enabled
+            else bool(self.config.get("email.enabled", False)) if self.config
+            else False
+        )
 
-            to_val = self.config.get("email.to", "")
-            if isinstance(to_val, list):
-                self.emails_to = [e.strip() for e in to_val if str(e).strip()]
-            else:
-                self.emails_to = [e.strip() for e in str(to_val).split(",") if e.strip()]
+        self.rate_limit_seconds = int(
+            os.getenv("EMAIL_RATE_LIMIT_SECONDS")
+            or (self.config.get("email.rate_limit_seconds", 300) if self.config else 300)
+        )
+        self.smtp_server = (
+            os.getenv("SMTP_SERVER")
+            or (self.config.get("email.smtp_server", "smtp.gmail.com") if self.config else "smtp.gmail.com")
+        )
+        self.smtp_port = int(
+            os.getenv("SMTP_PORT")
+            or (self.config.get("email.smtp_port", 587) if self.config else 587)
+        )
+        self.smtp_username = (
+            os.getenv("SMTP_USERNAME")
+            or (self.config.get("email.smtp_username", "") if self.config else "")
+            or ""
+        )
+        self.smtp_password = (
+            os.getenv("SMTP_PASSWORD")
+            or (self.config.get("email.smtp_password", "") if self.config else "")
+            or ""
+        )
+        self.email_from = (
+            os.getenv("EMAIL_FROM")
+            or (self.config.get("email.from", "") if self.config else "")
+            or self.smtp_username
+        )
+
+        env_to = os.getenv("EMAIL_TO", "")
+        cfg_to = self.config.get("email.to", "") if self.config else ""
+        to_val = env_to if env_to else cfg_to
+
+        if isinstance(to_val, list):
+            self.emails_to = [e.strip() for e in to_val if str(e).strip()]
         else:
-            self.enabled = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
-            self.rate_limit_seconds = int(os.getenv("EMAIL_RATE_LIMIT_SECONDS", "300"))
-            self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-            self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-            self.smtp_username = os.getenv("SMTP_USERNAME", "") or ""
-            self.smtp_password = os.getenv("SMTP_PASSWORD", "") or ""
-            self.email_from = os.getenv("EMAIL_FROM", self.smtp_username) or self.smtp_username
-            to_env = os.getenv("EMAIL_TO", "")
-            self.emails_to = [e.strip() for e in to_env.split(",") if e.strip()]
+            self.emails_to = [e.strip() for e in str(to_val).split(",") if e.strip()]
 
         if not self.enabled:
             logger.info("Email notifications are disabled")

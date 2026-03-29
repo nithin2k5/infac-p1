@@ -559,13 +559,16 @@ class DatabaseReader:
             result = {}
 
             for input_id in inputs:
+                # EB is normally ON; generators are normally OFF
+                default_state = 1 if input_id == 'eb' else 0
+
                 cursor.execute("""
                     SELECT state FROM events
                     WHERE input_id = %s AND timestamp < %s
                     ORDER BY timestamp DESC LIMIT 1
                 """, (input_id, start_ts))
                 row = cursor.fetchone()
-                initial_state = row['state'] if row else 1
+                initial_state = row['state'] if row else default_state
 
                 cursor.execute("""
                     SELECT state, timestamp FROM events
@@ -576,31 +579,40 @@ class DatabaseReader:
 
                 on_secs = 0.0
                 off_secs = 0.0
-                power_cuts = 0
+                count = 0        # power-cuts for EB, activations for generators
                 cur_state = initial_state
                 cur_ts = start_ts
 
                 for ev in events:
-                    delta = ev['timestamp'] - cur_ts
+                    delta = max(ev['timestamp'] - cur_ts, 0)
                     if cur_state == 1:
                         on_secs += delta
                     else:
                         off_secs += delta
-                    if ev['state'] == 0 and cur_state == 1:
-                        power_cuts += 1
+
+                    # EB: count each time it goes OFF (1→0)
+                    # Generators: count each time they come ON (0→1)
+                    if input_id == 'eb':
+                        if ev['state'] == 0 and cur_state == 1:
+                            count += 1
+                    else:
+                        if ev['state'] == 1 and cur_state == 0:
+                            count += 1
+
                     cur_state = ev['state']
                     cur_ts = ev['timestamp']
 
-                delta = now_ts - cur_ts
+                # Accumulate remaining time up to now
+                remaining = max(now_ts - cur_ts, 0)
                 if cur_state == 1:
-                    on_secs += delta
+                    on_secs += remaining
                 else:
-                    off_secs += delta
+                    off_secs += remaining
 
                 result[input_id] = {
-                    'on_seconds': max(on_secs, 0),
-                    'off_seconds': max(off_secs, 0),
-                    'power_cuts': power_cuts,
+                    'on_seconds': round(on_secs, 1),
+                    'off_seconds': round(off_secs, 1),
+                    'power_cuts': count,
                     'since_hour': since_hour,
                 }
 
