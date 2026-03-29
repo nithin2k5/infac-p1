@@ -866,6 +866,7 @@ class MonitorGUI:
         """Format duration in human-readable format."""
         if seconds is None:
             return "-"
+        seconds = abs(seconds)
         if seconds < 60:
             return f"{seconds:.1f}s"
         elif seconds < 3600:

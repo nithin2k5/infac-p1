@@ -475,23 +475,22 @@ class DatabaseReader:
             conn = self._get_connection()
             cursor = conn.cursor(dictionary=True)
             
-            # Get all EB events ordered by timestamp
+            # Get all EB events oldest-first so OFF always precedes its matching ON
             cursor.execute("""
                 SELECT id, state, timestamp
                 FROM events
                 WHERE input_id = 'eb'
-                ORDER BY timestamp DESC
+                ORDER BY timestamp ASC
             """)
-            
+
             all_events = cursor.fetchall()
-            
-            # Pair OFF events with their corresponding ON events
+
+            # Pair each OFF event with the next ON event
             power_history = []
             current_off = None
-            
+
             for event in all_events:
                 if event['state'] == 0:  # OFF event
-                    # If we already have an unclosed OFF, close it first
                     if current_off:
                         power_history.append({
                             'off_time': current_off['timestamp'],
@@ -502,17 +501,15 @@ class DatabaseReader:
                     current_off = event
                 elif event['state'] == 1:  # ON event
                     if current_off:
-                        # Calculate duration
                         duration = event['timestamp'] - current_off['timestamp']
                         power_history.append({
                             'off_time': current_off['timestamp'],
                             'on_time': event['timestamp'],
-                            'duration_seconds': duration,
+                            'duration_seconds': max(duration, 0),
                             'status': 'Completed'
                         })
                         current_off = None
-            
-            # If there's still an unclosed OFF event, add it
+
             if current_off:
                 power_history.append({
                     'off_time': current_off['timestamp'],
@@ -520,6 +517,9 @@ class DatabaseReader:
                     'duration_seconds': None,
                     'status': 'Ongoing'
                 })
+
+            # Show newest outages first
+            power_history.reverse()
             
             total_count = len(power_history)
             
