@@ -39,24 +39,34 @@ class GPIOReader:
     PIN_GEN2 = 22    # GPIO 22 (Pin 15) - Generator 2 status
     PIN_GEN3 = 23    # GPIO 23 (Pin 16) - Generator 3 status
     
+    # Default reason pins (BCM GPIO numbers)
+    PIN_REASON_EXT   = 5    # GPIO 5  (Pin 29) - External Power Cut
+    PIN_REASON_TRIP  = 6    # GPIO 6  (Pin 31) - Internal Trip
+    PIN_REASON_FUSE  = 13   # GPIO 13 (Pin 33) - Fuse Blown
+
     def __init__(
         self,
         on_state_change: Optional[Callable[[str, int, float], None]] = None,
         poll_interval: float = 0.5,
-        debounce_time: float = 0.1
+        debounce_time: float = 0.1,
+        reason_pins: Optional[Dict[str, int]] = None
     ):
         """
         Initialize GPIO reader.
-        
+
         Args:
-            on_state_change: Callback function(input_id, state, timestamp) called when state changes
-            poll_interval: Polling interval in seconds (default: 0.5s)
-            debounce_time: Debounce time in seconds to avoid false triggers (default: 0.1s)
+            on_state_change: Callback(input_id, state, timestamp) called on state changes
+            poll_interval: Polling interval in seconds (default 0.5s)
+            debounce_time: Debounce time in seconds (default 0.1s)
+            reason_pins: Optional dict mapping reason key → GPIO pin number.
+                Keys: 'reason_ext', 'reason_trip', 'reason_fuse'
         """
         self.on_state_change = on_state_change
         self.poll_interval = poll_interval
         self.debounce_time = debounce_time
-        
+
+        _rp = reason_pins or {}
+
         # Pin configuration
         self.pin_config = {
             'eb': {
@@ -82,7 +92,25 @@ class GPIOReader:
                 'name': 'Generator 3',
                 'last_state': None,
                 'last_change_time': 0
-            }
+            },
+            'reason_ext': {
+                'pin': _rp.get('reason_ext', self.PIN_REASON_EXT),
+                'name': 'Reason: External Power Cut',
+                'last_state': None,
+                'last_change_time': 0
+            },
+            'reason_trip': {
+                'pin': _rp.get('reason_trip', self.PIN_REASON_TRIP),
+                'name': 'Reason: Internal Trip',
+                'last_state': None,
+                'last_change_time': 0
+            },
+            'reason_fuse': {
+                'pin': _rp.get('reason_fuse', self.PIN_REASON_FUSE),
+                'name': 'Reason: Fuse Blown',
+                'last_state': None,
+                'last_change_time': 0
+            },
         }
         
         self.running = False

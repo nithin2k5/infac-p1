@@ -1,4 +1,4 @@
-"""Email notification sender for power status events."""
+"""Email notification sender for power outage events."""
 import os
 import logging
 import time
@@ -6,7 +6,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 from .config import Config  # type: ignore
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmailSender:
-    """Sends power status email notifications."""
+    """Sends power outage summary email notifications."""
 
     def __init__(self, config: Optional[Config] = None):
         self.config = config
@@ -98,7 +98,7 @@ class EmailSender:
             logger.info(f"Email sent successfully to: {', '.join(self.emails_to)}")
             return True
         except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"SMTP authentication failed — check username/password/app-password: {e}")
+            logger.error(f"SMTP auth failed — check username/password/app-password: {e}")
             return False
         except smtplib.SMTPConnectError as e:
             logger.error(f"SMTP connection failed — check server/port: {e}")
@@ -107,17 +107,38 @@ class EmailSender:
             logger.error(f"Failed to send email: {e}")
             return False
 
-    def send_power_status_notification(
+    @staticmethod
+    def _fmt_time(ts: Optional[float]) -> str:
+        """Format a unix timestamp as DD/MM/YYYY HH:MM, or '---' if None."""
+        if ts is None:
+            return "---"
+        return datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M")
+
+    @staticmethod
+    def _fmt_duration(t_on: Optional[float], t_off: Optional[float]) -> str:
+        """Format duration between two timestamps as H:MM Hrs, or 'Ongoing' / '---'."""
+        if t_on is None:
+            return "---"
+        if t_off is None:
+            return "Ongoing"
+        secs = max(t_off - t_on, 0)
+        h = int(secs // 3600)
+        m = int((secs % 3600) // 60)
+        return f"{h}:{m:02d} Hrs"
+
+    def send_outage_notification(
         self,
-        states: Dict[str, Optional[int]],
-        event_time: float
+        outage: Dict[str, Any],
+        bypass_rate_limit: bool = False
     ) -> bool:
         """
-        Send a power status email showing the current state of all inputs.
+        Send a power outage summary email.
 
-        Args:
-            states: dict with keys 'eb', 'gen1', 'gen2', 'gen3' and values 0/1/None
-            event_time: unix timestamp of the triggering event
+        outage dict keys:
+            eb_off_time   : float or None  — when EB went OFF
+            eb_on_time    : float or None  — when EB came back ON (None = still cut)
+            gen1/gen2/gen3: {'on': float|None, 'off': float|None}
+            reason        : str or None    — captured reason text
         """
         self._load_settings()
 
@@ -125,30 +146,42 @@ class EmailSender:
             logger.debug("Email notifications disabled — skipping")
             return False
 
-        if not self._check_rate_limit():
+        if not bypass_rate_limit and not self._check_rate_limit():
             return False
 
-        def fmt(val: Optional[int]) -> str:
-            if val is None:
-                return "UNKNOWN"
-            return "ON" if val == 1 else "OFF"
+        eb_cut    = self._fmt_time(outage.get('eb_off_time'))
+        eb_resume = self._fmt_time(outage.get('eb_on_time'))
+        eb_total  = self._fmt_duration(outage.get('eb_off_time'), outage.get('eb_on_time'))
 
-        eb   = fmt(states.get('eb'))
-        gen1 = fmt(states.get('gen1'))
-        gen2 = fmt(states.get('gen2'))
-        gen3 = fmt(states.get('gen3'))
+        dg_lines = []
+        for idx, key in enumerate(['gen1', 'gen2', 'gen3'], start=1):
+            g = outage.get(key, {})
+            on_t  = g.get('on')
+            off_t = g.get('off')
+            on_s   = self._fmt_time(on_t)
+            off_s  = self._fmt_time(off_t)
+            total  = self._fmt_duration(on_t, off_t)
+            prefix = f"DG - {idx}" if idx == 1 else f"DG-{idx} " if idx == 2 else f"DG -{idx}"
+            dg_lines.append(
+                f"{prefix} is Switched ON  @  {on_s} & Switched OFF @ {off_s} Total Hrs {total}"
+            )
 
-        event_dt = datetime.fromtimestamp(event_time).strftime("%Y-%m-%d %H:%M:%S")
+        reason_text = outage.get('reason') or "to be updated"
+        reason_line = (
+            f"Reason : {reason_text}"
+            f" ( External Power Cut  / Internal Trip / Fuse Blown )"
+            f"  ( OR )  ( to be updated )"
+        )
+
+        event_dt = self._fmt_time(outage.get('eb_off_time') or time.time())
         subject = f"Power Cut Information - {event_dt}"
 
         body = (
             "Greetings!!\n\n"
             "Sub: Power Cut Information -Reg\n\n"
-            "Greetings!!\n\n"
-            f"EB Power Is Turned {eb:<7} ( ON/OFF)\n"
-            f"DG - 1 is Switched {gen1:<7} ( ON/OFF)\n"
-            f"DG-2 is Switched   {gen2:<7} ( ON/OFF)\n"
-            f"DG -3 is Switched  {gen3:<7} ( ON/OFF)\n\n"
+            f"EB Power Is Power  cut @  {eb_cut} & Resumed  @ {eb_resume} Total Hrs {eb_total}\n"
+            + "\n".join(dg_lines)
+            + f"\n\n\n{reason_line}\n\n"
             "Thank you"
         )
 
@@ -158,5 +191,5 @@ class EmailSender:
                 self.last_notification_time = time.time()
             return success
         except Exception as e:
-            logger.error(f"Error sending power status email: {e}", exc_info=True)
+            logger.error(f"Error sending outage notification: {e}", exc_info=True)
             return False

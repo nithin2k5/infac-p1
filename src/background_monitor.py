@@ -15,23 +15,24 @@ from .email_sender import EmailSender  # type: ignore
 logger = logging.getLogger(__name__)
 
 
+def _empty_outage() -> dict:
+    return {
+        'eb_off_time':  None,
+        'eb_on_time':   None,
+        'gen1': {'on': None, 'off': None},
+        'gen2': {'on': None, 'off': None},
+        'gen3': {'on': None, 'off': None},
+        'reason':       None,
+    }
+
+
 class BackgroundMonitor:
     """Background service for 24/7 power monitoring."""
-    
+
     def __init__(self, config_path: Optional[str] = None):
-        """
-        Initialize background monitor.
-        
-        Args:
-            config_path: Path to configuration file (optional)
-        """
-        # Load configuration
         self.config = Config(config_path)
-        
-        # Setup logging
         self._setup_logging()
-        
-        # Initialize database writer
+
         db_config = self.config.get_database_config()
         self.db_writer = DatabaseWriter(
             host=db_config.get("host", "localhost"),
@@ -40,277 +41,305 @@ class BackgroundMonitor:
             password=db_config.get("password", ""),
             database=db_config.get("database", "ebpc")
         )
-        
+
         gpio_cfg = self.config.get("gpio", {}) or {}
-        poll_interval = float(gpio_cfg.get("poll_interval", 0.5))
-        debounce_time = float(gpio_cfg.get("debounce_time", 0.1))
+        poll_interval  = float(gpio_cfg.get("poll_interval", 0.5))
+        debounce_time  = float(gpio_cfg.get("debounce_time", 0.1))
+
+        rp_cfg = gpio_cfg.get("reason_pins", {})
+        reason_pins = {
+            'reason_ext':  int(rp_cfg.get("external_power_cut", 5)),
+            'reason_trip': int(rp_cfg.get("internal_trip",       6)),
+            'reason_fuse': int(rp_cfg.get("fuse_blown",          13)),
+        }
 
         self.gpio_reader = GPIOReader(
             on_state_change=self._handle_state_change,
             poll_interval=poll_interval,
             debounce_time=debounce_time,
+            reason_pins=reason_pins,
         )
 
-        # Status LED: HIGH = service running, LOW = stopped/crashed
         status_pin = self.config.get("gpio.status_pin", StatusLED.DEFAULT_PIN)
         self.status_led = StatusLED(pin=int(status_pin))
 
-        # Initialize Email sender
         self.email = EmailSender(self.config)
 
-        # State tracking
+        # Runtime state
         self.running: bool = False
         self.start_time: Optional[datetime] = None
-        self.eb_outage_start_time: Optional[float] = None
+
+        # Tracks live GPIO states for all inputs
+        self.current_states: dict = {
+            'eb': None, 'gen1': None, 'gen2': None, 'gen3': None,
+            'reason_ext': None, 'reason_trip': None, 'reason_fuse': None,
+        }
+
+        # Full outage event being tracked
+        self._outage: dict = _empty_outage()
+        self._outage_active: bool = False
+        self._outage_email_sent: bool = False
+
+        # 60-second timer: fires if no DG / reason within 1 min of EB going OFF
+        self._pending_email_timer: Optional[threading.Timer] = None
+
+        # Legacy outage DB tracking
         self.current_outage_id: Optional[int] = None
-        self.current_states: dict = {'eb': None, 'gen1': None, 'gen2': None, 'gen3': None}
-        
-        # Setup signal handlers for graceful shutdown
-        signal.signal(signal.SIGINT, self._signal_handler)
+
+        signal.signal(signal.SIGINT,  self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-        
+
         logger.info("Background monitor initialized")
-    
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Internal helpers
+    # ──────────────────────────────────────────────────────────────────────────
+
     def _setup_logging(self) -> None:
-        """Setup logging configuration."""
         log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        log_level = logging.INFO
-        
-        # Configure root logger
         logging.basicConfig(
-            level=log_level,
+            level=logging.INFO,
             format=log_format,
             handlers=[
                 logging.StreamHandler(sys.stdout),
                 logging.FileHandler('monitor_service.log', mode='a')
             ]
         )
-    
+
     def _signal_handler(self, signum, frame):
-        """Handle shutdown signals."""
-        logger.info(f"Received signal {signum}, shutting down...")
+        logger.info(f"Received signal {signum}, shutting down…")
         self.stop()
         sys.exit(0)
-    
+
+    def _cancel_pending_timer(self) -> None:
+        if self._pending_email_timer:
+            self._pending_email_timer.cancel()
+            self._pending_email_timer = None
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # GPIO state-change handler
+    # ──────────────────────────────────────────────────────────────────────────
+
     def _handle_state_change(self, input_id: str, state: int, timestamp: float) -> None:
-        """
-        Handle state change from GPIO reader.
-        
-        Args:
-            input_id: Input identifier ('eb', 'gen1', 'gen2')
-            state: New state (0=OFF, 1=ON)
-            timestamp: Unix timestamp of change
-        """
         try:
             input_names = {
-                'eb':   'EB (Electricity Board)',
-                'gen1': 'Generator 1',
-                'gen2': 'Generator 2',
-                'gen3': 'Generator 3',
+                'eb':           'EB (Electricity Board)',
+                'gen1':         'Generator 1',
+                'gen2':         'Generator 2',
+                'gen3':         'Generator 3',
+                'reason_ext':   'Reason: External Power Cut',
+                'reason_trip':  'Reason: Internal Trip',
+                'reason_fuse':  'Reason: Fuse Blown',
             }
             input_name = input_names.get(input_id, input_id.upper())
 
             logger.info(
-                f"State change: {input_name} -> {'ON' if state == 1 else 'OFF'} "
+                f"State change: {input_name} → {'ON' if state == 1 else 'OFF'} "
                 f"at {datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
-            # Update current state tracking
             self.current_states[input_id] = state
 
-            # Record event in database
+            # ── Reason pins ──────────────────────────────────────────────────
+            if input_id in ('reason_ext', 'reason_trip', 'reason_fuse') and state == 1:
+                reason_map = {
+                    'reason_ext':  'External Power Cut',
+                    'reason_trip': 'Internal Trip',
+                    'reason_fuse': 'Fuse Blown',
+                }
+                self._outage['reason'] = reason_map[input_id]
+                logger.info(f"Reason captured: {self._outage['reason']}")
+                return  # reason pins don't go to DB
+
+            # ── DB event recording (only for power/generator inputs) ─────────
             event_id = self.db_writer.record_event(
                 input_id=input_id,
                 input_name=input_name,
                 state=state,
                 timestamp=timestamp
             )
-
             if event_id:
-                logger.info(f"Event recorded with ID: {event_id}")
+                logger.info(f"Event recorded ID={event_id}")
             else:
                 logger.error("Failed to record event in database")
 
-            # Power outage: EB went OFF
+            # ── EB OFF → power cut detected ──────────────────────────────────
             if input_id == 'eb' and state == 0:
-                logger.warning("POWER OUTAGE DETECTED - EB went OFF")
-                self._handle_power_outage(timestamp)
-                self._send_status_email(timestamp)
+                logger.warning("POWER OUTAGE DETECTED — EB went OFF")
+                self._outage = _empty_outage()
+                self._outage['eb_off_time'] = timestamp
+                self._outage_active = True
+                self._outage_email_sent = False
+                self._record_outage_start(timestamp)
+                # Start 60-second fallback timer
+                self._cancel_pending_timer()
+                t = threading.Timer(60.0, self._send_fallback_email)
+                t.daemon = True
+                t.start()
+                self._pending_email_timer = t
 
-            # Power restored: EB came back ON
+            # ── EB ON → power restored ───────────────────────────────────────
             elif input_id == 'eb' and state == 1:
-                logger.info("POWER RESTORED - EB is back ON")
-                self._handle_power_restored(timestamp)
-                self._send_status_email(timestamp)
+                logger.info("POWER RESTORED — EB is back ON")
+                self._cancel_pending_timer()
+                if self._outage_active:
+                    self._outage['eb_on_time'] = timestamp
+                    self._record_outage_end(timestamp)
+                    # Mark any DGs still running as "off" at restore time
+                    for g in ('gen1', 'gen2', 'gen3'):
+                        if self._outage[g]['on'] and not self._outage[g]['off']:
+                            self._outage[g]['off'] = timestamp
+                    self._send_outage_email(bypass_rate_limit=False)
+                self._outage_active = False
 
-            # Generator state change
-            elif input_id in ['gen1', 'gen2', 'gen3']:
+            # ── Generator state change ────────────────────────────────────────
+            elif input_id in ('gen1', 'gen2', 'gen3'):
                 if state == 1:
                     self._handle_generator_activation(input_id, timestamp)
-                self._send_status_email(timestamp)
+                    if self._outage_active and not self._outage_email_sent:
+                        self._cancel_pending_timer()
+                        self._send_outage_email(bypass_rate_limit=True)
+                        self._outage_email_sent = True
+                elif state == 0 and self._outage_active:
+                    if not self._outage[input_id]['off']:
+                        self._outage[input_id]['off'] = timestamp
 
         except Exception as e:
             logger.error(f"Error handling state change: {e}", exc_info=True)
-    
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Outage helpers
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _record_outage_start(self, timestamp: float) -> None:
+        try:
+            self.current_outage_id = self.db_writer.insert_outage(timestamp)
+            logger.warning(f"Outage recorded ID={self.current_outage_id}")
+        except Exception as e:
+            logger.error(f"Failed to record outage start: {e}")
+            self.current_outage_id = None
+
+    def _record_outage_end(self, timestamp: float) -> None:
+        off_t = self._outage.get('eb_off_time')
+        if off_t and self.current_outage_id:
+            duration = timestamp - off_t
+            try:
+                self.db_writer.update_outage_end(self.current_outage_id, timestamp, duration)
+            except Exception as e:
+                logger.error(f"Failed to update outage end: {e}")
+        self.current_outage_id = None
+
+    def _handle_generator_activation(self, generator_id: str, timestamp: float) -> None:
+        eb_start = self._outage.get('eb_off_time')
+        if not eb_start:
+            return
+        if not self._outage[generator_id]['on']:
+            self._outage[generator_id]['on'] = timestamp
+        interval = timestamp - eb_start
+        logger.info(f"{generator_id.upper()} activated {interval:.1f}s after power cut")
+        if self.current_outage_id:
+            try:
+                self.db_writer.update_outage_generator(
+                    self.current_outage_id, generator_id, timestamp, notification_sent=False
+                )
+            except Exception as e:
+                logger.error(f"Failed to update outage generator: {e}")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Email helpers
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _send_outage_email(self, bypass_rate_limit: bool = False) -> None:
+        try:
+            self.email.send_outage_notification(
+                outage=dict(self._outage),
+                bypass_rate_limit=bypass_rate_limit
+            )
+        except Exception as e:
+            logger.error(f"Failed to send outage email: {e}")
+
+    def _send_fallback_email(self) -> None:
+        """Fired 60s after EB went OFF if no DG activated yet."""
+        if self._outage_email_sent:
+            return
+        self._outage_email_sent = True
+        if not self._outage.get('reason'):
+            self._outage['reason'] = "to be updated"
+        logger.warning("60s elapsed with no DG/reason — sending fallback email")
+        self._send_outage_email(bypass_rate_limit=True)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Service lifecycle
+    # ──────────────────────────────────────────────────────────────────────────
+
     def start(self) -> None:
-        """Start the background monitoring service."""
         if self.running:
             logger.warning("Monitor already running")
             return
-        
+
         logger.info("=" * 60)
         logger.info("Starting Background Power Monitor Service")
         logger.info("=" * 60)
-        
+
         self.running = True
         self.start_time = datetime.now()
-        
-        # Test database connection
+
         if not self.db_writer.test_connection():
-            logger.error("Cannot connect to database. Please check configuration.")
+            logger.error("Cannot connect to database. Check configuration.")
             self.running = False
             return
-        
+
         logger.info("Database connection successful")
-        
-        # Display pin configuration
+
         logger.info("\nGPIO Pin Configuration:")
         for input_id, info in self.gpio_reader.get_pin_config().items():
-            logger.info(f"  {input_id.upper()}: GPIO Pin {info['pin']} - {info['name']}")
-        
-        # Start GPIO monitoring
-        self.gpio_reader.start_monitoring()
+            logger.info(f"  {input_id.upper()}: GPIO Pin {info['pin']} — {info['name']}")
 
-        # Signal that service is running
+        self.gpio_reader.start_monitoring()
         self.status_led.on()
         logger.info(f"Status LED ON (GPIO {self.status_led.pin})")
-        
-        logger.info("\n✓ Monitor service started successfully")
-        logger.info("Monitoring power status 24/7...")
-        logger.info("Press Ctrl+C to stop\n")
-        
-        # Keep the main thread alive
+        logger.info("\n✓ Monitor service started — monitoring 24/7…\n")
+
         try:
             while self.running:
                 time.sleep(1)
-                
-                # Periodic status update (every hour)
                 if int(time.time()) % 3600 == 0:
                     st = self.start_time
                     if st:
-                        uptime = datetime.now() - st
-                        logger.info(f"Service running - Uptime: {uptime}")
-                    
+                        logger.info(f"Service uptime: {datetime.now() - st}")
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")
         finally:
             self.stop()
-    
+
     def stop(self) -> None:
-        """Stop the monitoring service."""
         if not self.running:
             return
-        
-        logger.info("Stopping background monitor service...")
+        logger.info("Stopping background monitor service…")
         self.running = False
-        
-        # Turn off status LED first so it goes LOW even if cleanup crashes
+        self._cancel_pending_timer()
         self.status_led.cleanup()
-
-        # Stop GPIO monitoring
         self.gpio_reader.cleanup()
-
-        # Close database connection
         self.db_writer.close()
-        
         st = self.start_time
         if st:
-            uptime = datetime.now() - st
-            logger.info(f"Service stopped. Total uptime: {uptime}")
-        
+            logger.info(f"Service stopped. Total uptime: {datetime.now() - st}")
         logger.info("Background monitor service stopped")
-    
-    def _handle_power_outage(self, timestamp: float) -> None:
-        """Handle EB power outage."""
-        self.eb_outage_start_time = timestamp
-        try:
-            self.current_outage_id = self.db_writer.insert_outage(timestamp)
-            logger.warning(f"Power outage recorded at timestamp: {timestamp} (Outage ID: {self.current_outage_id})")
-        except Exception as e:
-            logger.error(f"Failed to record outage in database: {e}")
-            self.current_outage_id = None
-            logger.warning(f"Power outage recorded at timestamp: {timestamp}")
-    
-    def _handle_power_restored(self, timestamp: float) -> None:
-        """Handle EB power restoration."""
-        eb_start = self.eb_outage_start_time
-        if eb_start:
-            duration = timestamp - eb_start
-            logger.info(f"Power restored after {duration:.0f} seconds")
-            
-            if self.current_outage_id:
-                try:
-                    self.db_writer.update_outage_end(self.current_outage_id, timestamp, duration)
-                except Exception as e:
-                    logger.error(f"Failed to update outage end in database: {e}")
-            
-            self.eb_outage_start_time = None
-            self.current_outage_id = None
-    
-    def _send_status_email(self, timestamp: float) -> None:
-        """Send a power status email with the current state of all inputs."""
-        try:
-            self.email.send_power_status_notification(
-                states=self.current_states,
-                event_time=timestamp
-            )
-        except Exception as e:
-            logger.error(f"Failed to send status email: {e}")
 
-    def _handle_generator_activation(self, generator_id: str, timestamp: float) -> None:
-        """Record generator activation against the current outage."""
-        eb_start = self.eb_outage_start_time
-        if not eb_start:
-            return
-
-        interval_seconds = timestamp - eb_start
-        generator_names = {
-            'gen1': 'Generator 1 (GEN1)',
-            'gen2': 'Generator 2 (GEN2)',
-            'gen3': 'Generator 3 (GEN3)',
-        }
-        generator_name = generator_names.get(generator_id, generator_id.upper())
-
-        logger.info(f"{generator_name} activated {interval_seconds:.1f}s after power cut")
-
-        if self.current_outage_id:
-            try:
-                self.db_writer.update_outage_generator(
-                    self.current_outage_id,
-                    generator_id,
-                    timestamp,
-                    notification_sent=False
-                )
-            except Exception as e:
-                logger.error(f"Failed to update outage generator in database: {e}")
-    
     def get_status(self) -> dict:
-        """Get current service status."""
         st = self.start_time
         return {
-            'running': self.running,
-            'start_time': st.isoformat() if st else None,
-            'uptime': str(datetime.now() - st) if st else None,
-            'pin_config': self.gpio_reader.get_pin_config(),
-            'email_enabled': self.email.enabled
+            'running':       self.running,
+            'start_time':    st.isoformat() if st else None,
+            'uptime':        str(datetime.now() - st) if st else None,
+            'pin_config':    self.gpio_reader.get_pin_config(),
+            'email_enabled': self.email.enabled,
         }
 
 
 def main():
-    """Main entry point for background monitor service."""
-    print("Raspberry Pi Power Monitor - Background Service")
+    print("Raspberry Pi Power Monitor — Background Service")
     print("=" * 60)
-    
     try:
         monitor = BackgroundMonitor()
         monitor.start()
@@ -321,4 +350,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
