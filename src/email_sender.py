@@ -187,3 +187,25 @@ class EmailSender:
         except Exception as e:
             logger.error(f"Error sending outage notification: {e}", exc_info=True)
             return False
+
+    def send_test_email(self) -> bool:
+        """Send a test email to verify SMTP settings and recipients."""
+        self._load_settings()
+
+        if not self.smtp_username or not self.smtp_password:
+            logger.warning("Test email: missing SMTP username or password")
+            return False
+        if not self.emails_to:
+            logger.warning("Test email: no recipients configured")
+            return False
+
+        subject = "Power Monitor — Test Email"
+        body = (
+            "This is a test message from the Power Monitor application.\n\n"
+            f"Recipients: {', '.join(self.emails_to)}\n"
+            f"Sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            "If you received this, outage alerts will be delivered to these addresses "
+            "when email notifications are enabled and the background service detects power events."
+        )
+        return self._send_smtp(subject, body)
+
