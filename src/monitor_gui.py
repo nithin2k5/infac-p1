@@ -193,7 +193,12 @@ class MonitorGUI:
         self.notebook.add(self.eb_history_frame, text="EB Power History")
         self._build_eb_history_page()
         
-        # Page 4: Settings / Notifications
+        # Page 4: Daily Summary
+        self.summary_frame = ttk.Frame(self.notebook, padding="20")
+        self.notebook.add(self.summary_frame, text="Daily Summary")
+        self._build_summary_page()
+
+        # Page 5: Settings / Notifications
         self.settings_frame = ttk.Frame(self.notebook, padding="20")
         self.notebook.add(self.settings_frame, text="Notifications Settings")
         self._build_settings_page()
@@ -210,9 +215,8 @@ class MonitorGUI:
         self.dashboard_frame.columnconfigure(0, weight=1)
         self.dashboard_frame.rowconfigure(0, weight=0)
         self.dashboard_frame.rowconfigure(1, weight=2)
-        self.dashboard_frame.rowconfigure(2, weight=0)
-        self.dashboard_frame.rowconfigure(3, weight=3)
-        self.dashboard_frame.rowconfigure(4, weight=0)
+        self.dashboard_frame.rowconfigure(2, weight=3)
+        self.dashboard_frame.rowconfigure(3, weight=0)
         
         # Title
         title_label = ttk.Label(
@@ -253,28 +257,19 @@ class MonitorGUI:
             # Build status card
             self._build_status_card(card_frame, input_id, subtitle)
         
-        # ========== SECTION 2: DAILY SUMMARY ==========
-        summary_section = ttk.LabelFrame(
-            self.dashboard_frame,
-            text="Today's Summary",
-            padding="8"
-        )
-        summary_section.grid(row=2, column=0, sticky="ew", pady=(0, 6))
-        self._build_summary_section(summary_section)
-
-        # ========== SECTION 3: COMBINED GRAPH ==========
+        # ========== SECTION 2: COMBINED GRAPH ==========
         graph_section = ttk.LabelFrame(
             self.dashboard_frame,
             text="Power Inputs History (All Sources)",
             padding="10"
         )
-        graph_section.grid(row=3, column=0, sticky="nsew", pady=(0, 10))
+        graph_section.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
 
         self._build_graph_panel(graph_section)
 
         # Bottom controls
         controls_frame = ttk.Frame(self.dashboard_frame)
-        controls_frame.grid(row=4, column=0, sticky="ew", pady=(0, 5))
+        controls_frame.grid(row=3, column=0, sticky="ew", pady=(0, 5))
         
         # Last updated label
         self.last_updated_label = ttk.Label(
@@ -382,6 +377,25 @@ class MonitorGUI:
         
         # Store graph reference
         self.graph_frame = parent
+
+    def _build_summary_page(self) -> None:
+        """Build the Daily Summary tab."""
+        self.summary_frame.columnconfigure(0, weight=1)
+        self.summary_frame.rowconfigure(1, weight=1)
+
+        ttk.Label(
+            self.summary_frame,
+            text="Daily Summary",
+            font=("Arial", 16, "bold")
+        ).grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        content = ttk.LabelFrame(self.summary_frame, text="Today's Summary", padding="14")
+        content.grid(row=1, column=0, sticky="nsew")
+        self._build_summary_section(content)
+
+        ctrl = ttk.Frame(self.summary_frame)
+        ctrl.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        ttk.Button(ctrl, text="Refresh", command=self._update_summary).pack(side=tk.RIGHT)
 
     def _build_summary_section(self, parent) -> None:
         """Build the today's summary table inside the given LabelFrame."""
