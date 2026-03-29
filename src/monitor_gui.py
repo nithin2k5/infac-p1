@@ -319,15 +319,15 @@ class MonitorGUI:
         led_canvas.pack()
         
         # Draw LED circle (will be updated based on state)
-        glow_circle = led_canvas.create_oval(3, 3, 67, 67, fill="#e0e0e0", outline="", state="hidden")
-        led_circle = led_canvas.create_oval(18, 18, 52, 52, fill="#cccccc", outline="#888888", width=2)
-        
+        glow_circle = led_canvas.create_oval(3, 3, 67, 67, fill="#ff9999", outline="", state="normal")
+        led_circle = led_canvas.create_oval(18, 18, 52, 52, fill="#ff3333", outline="#cc0000", width=2)
+
         # Status label
         status_label = ttk.Label(
             parent,
             text="OFF",
             font=("Arial", 11, "bold"),
-            foreground="#666666"
+            foreground="#cc0000"
         )
         status_label.pack(pady=3)
         
@@ -400,7 +400,7 @@ class MonitorGUI:
                 'eb':   '-',
                 'gen1': ':',
                 'gen2': ':',
-                'gen3': '--',
+                'gen3': ':',
             }
             y_positions = {'eb': 3, 'gen1': 2, 'gen2': 1, 'gen3': 0}
             
@@ -596,31 +596,28 @@ class MonitorGUI:
                 timestamp_label = card_data['timestamp_label']
                 
                 # Update LED and power representation based on state
-                if state == 1:  # ON - RED color
-                    # Red LED for ON state
-                    fill_color = "#ff0000"  # Red
-                    outline_color = "#cc0000"
+                if state == 1:  # ON - Green
+                    fill_color = "#00cc44"
+                    outline_color = "#009933"
                     status_text = "ON"
-                    status_fg = "#cc0000"
-                    power_level = 100  # 100% when ON
-                    power_color = "#ff0000"  # Red
-                    
-                    # Show glow effect for ON state
+                    status_fg = "#009933"
+                    power_level = 100
+                    power_color = "#00cc44"
+
                     if glow_circle_id:
-                        canvas.itemconfig(glow_circle_id, fill="#ff6666", outline="", state="normal")
+                        canvas.itemconfig(glow_circle_id, fill="#66ffaa", outline="", state="normal")
                         canvas.lower(glow_circle_id, circle_id)
-                else:  # OFF - No color (gray)
-                    # Gray for OFF state
-                    fill_color = "#cccccc"
-                    outline_color = "#888888"
+                else:  # OFF - Red
+                    fill_color = "#ff3333"
+                    outline_color = "#cc0000"
                     status_text = "OFF"
-                    status_fg = "#666666"
-                    power_level = 0  # 0% when OFF
-                    power_color = "#cccccc"  # Gray
-                    
-                    # Hide glow for OFF state
+                    status_fg = "#cc0000"
+                    power_level = 0
+                    power_color = "#ff3333"
+
                     if glow_circle_id:
-                        canvas.itemconfig(glow_circle_id, state="hidden")
+                        canvas.itemconfig(glow_circle_id, fill="#ff9999", outline="", state="normal")
+                        canvas.lower(glow_circle_id, circle_id)
                 
                 # Update LED circle
                 canvas.itemconfig(circle_id, fill=fill_color, outline=outline_color, width=3)
