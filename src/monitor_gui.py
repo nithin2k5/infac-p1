@@ -115,9 +115,15 @@ class MonitorGUI:
         # Setup keyboard shortcuts
         self._setup_keyboard_shortcuts()
         
-        # Load initial data
+        # Load initial data and start dashboard auto-refresh automatically
         self.refresh_data()
+        self.root.after(100, self._start_dashboard_auto_refresh)
     
+    def _start_dashboard_auto_refresh(self) -> None:
+        self.dashboard_auto_refresh_var.set(True)
+        self.dashboard_auto_refresh_enabled = True
+        self._schedule_dashboard_auto_refresh()
+
     def _apply_maximized_window(self) -> None:
         try:
             self.root.state("zoomed")
@@ -235,9 +241,10 @@ class MonitorGUI:
         # Create status cards for each input
         self.status_cards = {}
         inputs = [
-            ('eb', 'EB (Electricity Board)', 'Main Power'),
-            ('gen1', 'GEN1', 'Generator 1'),
-            ('gen2', 'GEN2', 'Generator 2'),
+            ('eb',   'EB (Electricity Board)', 'Main Power'),
+            ('gen1', 'GEN1',                   'Generator 1'),
+            ('gen2', 'GEN2',                   'Generator 2'),
+            ('gen3', 'GEN3',                   'Generator 3'),
         ]
         
         for col, (input_id, title, subtitle) in enumerate(inputs):
@@ -381,15 +388,21 @@ class MonitorGUI:
             end_time = datetime.now().timestamp()
             start_time = end_time - (4 * 3600)  # Last 4 hours
             
-            inputs = ['eb', 'gen1', 'gen2']
-            input_names = {'eb': 'EB', 'gen1': 'GEN1', 'gen2': 'GEN2'}
+            inputs = ['eb', 'gen1', 'gen2', 'gen3']
+            input_names = {'eb': 'EB', 'gen1': 'GEN1', 'gen2': 'GEN2', 'gen3': 'GEN3'}
             colors = {
-                'eb': '#0077ff',
+                'eb':   '#0077ff',
                 'gen1': '#00aa55',
-                'gen2': '#ff8800',
+                'gen2': '#cc0000',
+                'gen3': '#ff8800',
             }
-            linestyles = {'eb': '-', 'gen1': '--', 'gen2': '-.'}
-            y_positions = {'eb': 2, 'gen1': 1, 'gen2': 0}
+            linestyles = {
+                'eb':   '-',
+                'gen1': ':',
+                'gen2': ':',
+                'gen3': '--',
+            }
+            y_positions = {'eb': 3, 'gen1': 2, 'gen2': 1, 'gen3': 0}
             
             # Clear previous plot
             self.graph_ax.clear()
@@ -442,10 +455,10 @@ class MonitorGUI:
             # Configure axis for time vs inputs
             self.graph_ax.set_xlabel('Time', fontsize=10)
             self.graph_ax.set_ylabel('Inputs', fontsize=10)
-            self.graph_ax.set_title('EB / GEN1 / GEN2 Timeline (Last 4 Hours)', fontsize=12, fontweight='bold')
-            self.graph_ax.set_ylim(-0.5, 2.5)
-            self.graph_ax.set_yticks([0, 1, 2])
-            self.graph_ax.set_yticklabels(['GEN2', 'GEN1', 'EB'])
+            self.graph_ax.set_title('EB / GEN1 / GEN2 / GEN3 Timeline (Last 4 Hours)', fontsize=12, fontweight='bold')
+            self.graph_ax.set_ylim(-0.5, 3.5)
+            self.graph_ax.set_yticks([0, 1, 2, 3])
+            self.graph_ax.set_yticklabels(['GEN3', 'GEN2', 'GEN1', 'EB'])
             self.graph_ax.grid(True, alpha=0.3, linestyle='--')
             
             if has_data:
@@ -648,7 +661,7 @@ class MonitorGUI:
         self.input_combo = ttk.Combobox(
             filters_frame,
             textvariable=self.input_var,
-            values=["All", "eb", "gen1", "gen2"],
+            values=["All", "eb", "gen1", "gen2", "gen3"],
             state="readonly",
             width=12
         )

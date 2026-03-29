@@ -34,9 +34,10 @@ class GPIOReader:
     """Read power status from Raspberry Pi GPIO pins."""
     
     # GPIO Pin assignments
-    PIN_EB = 17      # GPIO 17 (Pin 11) - EB power status
+    PIN_EB   = 17    # GPIO 17 (Pin 11) - EB power status
     PIN_GEN1 = 27    # GPIO 27 (Pin 13) - Generator 1 status
     PIN_GEN2 = 22    # GPIO 22 (Pin 15) - Generator 2 status
+    PIN_GEN3 = 23    # GPIO 23 (Pin 16) - Generator 3 status
     
     def __init__(
         self,
@@ -73,6 +74,12 @@ class GPIOReader:
             'gen2': {
                 'pin': self.PIN_GEN2,
                 'name': 'Generator 2',
+                'last_state': None,
+                'last_change_time': 0
+            },
+            'gen3': {
+                'pin': self.PIN_GEN3,
+                'name': 'Generator 3',
                 'last_state': None,
                 'last_change_time': 0
             }
