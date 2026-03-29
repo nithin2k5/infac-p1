@@ -143,8 +143,8 @@ class EmailSender:
         if not bypass_rate_limit and not self._check_rate_limit():
             return False
 
-        eb_cut    = self._fmt_time(outage.get('eb_off_time'))
-        eb_resume = self._fmt_time(outage.get('eb_on_time'))
+        eb_off    = self._fmt_time(outage.get('eb_off_time'))
+        eb_on     = self._fmt_time(outage.get('eb_on_time'))
         eb_total  = self._fmt_duration(outage.get('eb_off_time'), outage.get('eb_on_time'))
 
         dg_lines = []
@@ -173,7 +173,7 @@ class EmailSender:
         body = (
             "Greetings!!\n\n"
             "Sub: Power Cut Information -Reg\n\n"
-            f"EB Power Is Power  cut @  {eb_cut} & Resumed  @ {eb_resume} Total Hrs {eb_total}\n"
+            f"EB Power Switched OFF @  {eb_off} & Switched ON @ {eb_on} Total Hrs {eb_total}\n"
             + "\n".join(dg_lines)
             + f"\n\n\n{reason_line}\n\n"
             "Thank you"
