@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Cut Information</title>
+</head>
+<body style="margin:0;padding:24px;background-color:#f4f6f8;font-family:Segoe UI, Arial, Helvetica, sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+<tr>
+<td style="padding:28px 28px 8px 28px;">
+<p style="margin:0 0 16px 0;">Greetings,</p>
+<p style="margin:0 0 8px 0;font-size:16px;font-weight:600;color:#0f172a;">Power Cut Information</p>
+<p style="margin:0 0 24px 0;font-size:13px;color:#64748b;">Summary of EB outage and generator run times for the reported event.</p>
+
+<p style="margin:0 0 10px 0;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:#334155;">EB (main supply)</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;margin-bottom:24px;">
+<tr style="background-color:#f8fafc;">
+<th align="left" style="padding:12px 14px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">Power cut</th>
+<th align="left" style="padding:12px 14px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">Resumed</th>
+<th align="left" style="padding:12px 14px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">Total duration</th>
+</tr>
+<tr>
+<td style="padding:14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${eb_powercut}</td>
+<td style="padding:14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${eb_resumed}</td>
+<td style="padding:14px;font-size:14px;color:#0f172a;font-weight:500;">${eb_total_dhm}</td>
+</tr>
+</table>
+
+<p style="margin:0 0 10px 0;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:#334155;">DG (generators)</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:6px;margin-bottom:24px;">
+<tr style="background-color:#f8fafc;">
+<th align="left" style="padding:12px 14px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;width:18%;">Unit</th>
+<th align="left" style="padding:12px 14px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">Switch ON</th>
+<th align="left" style="padding:12px 14px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">Switch OFF</th>
+<th align="left" style="padding:12px 14px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;">Run time</th>
+</tr>
+<tr>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">DG-1</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${dg1_on}</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${dg1_off}</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${dg1_runtime}</td>
+</tr>
+<tr>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">DG-2</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${dg2_on}</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${dg2_off}</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${dg2_runtime}</td>
+</tr>
+<tr>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;font-weight:600;">DG-3</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;">${dg3_on}</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;">${dg3_off}</td>
+<td style="padding:12px 14px;font-size:14px;color:#0f172a;">${dg3_runtime}</td>
+</tr>
+</table>
+
+<p style="margin:0 0 8px 0;font-size:14px;"><strong style="color:#334155;">Reason:</strong> <span style="color:#0f172a;">${reason}</span></p>
+<p style="margin:24px 0 0 0;color:#64748b;font-size:14px;">Thank you.</p>
+</td>
+</tr>
+</table>
+</body>
+</html>

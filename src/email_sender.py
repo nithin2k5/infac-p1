@@ -1,11 +1,13 @@
 """Email notification sender for power outage events."""
-import os
+import html
 import logging
 import time
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from pathlib import Path
+from string import Template
 from typing import Optional, Dict, Any
 
 from .config import Config  # type: ignore
@@ -17,6 +19,8 @@ except ImportError:
     logging.warning("python-dotenv not available. Environment variables must be set manually.")
 
 logger = logging.getLogger(__name__)
+
+_OUTAGE_HTML_TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "outage_email.html"
 
 
 class EmailSender:
@@ -73,13 +77,23 @@ class EmailSender:
             return False
         return True
 
-    def _send_smtp(self, subject: str, body: str) -> bool:
+    def _send_smtp(
+        self,
+        subject: str,
+        body_plain: str,
+        body_html: Optional[str] = None,
+    ) -> bool:
         try:
-            msg = MIMEMultipart()
+            if body_html:
+                msg = MIMEMultipart("alternative")
+                msg.attach(MIMEText(body_plain, "plain", "utf-8"))
+                msg.attach(MIMEText(body_html, "html", "utf-8"))
+            else:
+                msg = MIMEMultipart()
+                msg.attach(MIMEText(body_plain, "plain", "utf-8"))
             msg['From'] = self.email_from
             msg['To'] = ", ".join(self.emails_to)
             msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain'))
 
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             server.ehlo()
@@ -109,16 +123,52 @@ class EmailSender:
         return datetime.fromtimestamp(ts).strftime("%d/%m/%Y %H:%M")
 
     @staticmethod
-    def _fmt_duration(t_on: Optional[float], t_off: Optional[float]) -> str:
-        """Format duration between two timestamps as H:MM Hrs, or 'Ongoing' / '---'."""
-        if t_on is None:
+    def _fmt_duration_dhm(t_start: Optional[float], t_end: Optional[float]) -> str:
+        if t_start is None:
             return "---"
-        if t_off is None:
+        if t_end is None:
             return "Ongoing"
-        secs = max(t_off - t_on, 0)
-        h = int(secs // 3600)
-        m = int((secs % 3600) // 60)
-        return f"{h}:{m:02d} Hrs"
+        secs = int(max(t_end - t_start, 0))
+        days, rem = divmod(secs, 86400)
+        hours, rem2 = divmod(rem, 3600)
+        minutes = rem2 // 60
+        parts = []
+        if days:
+            parts.append(f"{days}d")
+        parts.append(f"{hours}h")
+        parts.append(f"{minutes}m")
+        return " ".join(parts)
+
+    def _render_outage_html(self, outage: Dict[str, Any], reason_text: str) -> Optional[str]:
+        if not _OUTAGE_HTML_TEMPLATE.is_file():
+            logger.warning("Outage HTML template missing at %s", _OUTAGE_HTML_TEMPLATE)
+            return None
+        try:
+            raw = _OUTAGE_HTML_TEMPLATE.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.error("Could not read outage HTML template: %s", e)
+            return None
+
+        eb_off_t = outage.get("eb_off_time")
+        eb_on_t = outage.get("eb_on_time")
+        subs = {
+            "eb_powercut": html.escape(self._fmt_time(eb_off_t)),
+            "eb_resumed": html.escape(self._fmt_time(eb_on_t)),
+            "eb_total_dhm": html.escape(self._fmt_duration_dhm(eb_off_t, eb_on_t)),
+            "reason": html.escape(reason_text),
+        }
+        for idx, key in enumerate(["gen1", "gen2", "gen3"], start=1):
+            g = outage.get(key, {})
+            on_t = g.get("on")
+            off_t = g.get("off")
+            subs[f"dg{idx}_on"] = html.escape(self._fmt_time(on_t))
+            subs[f"dg{idx}_off"] = html.escape(self._fmt_time(off_t))
+            subs[f"dg{idx}_runtime"] = html.escape(self._fmt_duration_dhm(on_t, off_t))
+        try:
+            return Template(raw).substitute(**subs)
+        except (KeyError, ValueError) as e:
+            logger.error("Outage HTML template substitute failed: %s", e)
+            return None
 
     def send_outage_notification(
         self,
@@ -143,40 +193,47 @@ class EmailSender:
         if not bypass_rate_limit and not self._check_rate_limit():
             return False
 
-        eb_off = self._fmt_time(outage.get('eb_off_time'))
-        eb_on = self._fmt_time(outage.get('eb_on_time'))
-        eb_total = self._fmt_duration(outage.get('eb_off_time'), outage.get('eb_on_time'))
+        eb_off_t = outage.get("eb_off_time")
+        eb_on_t = outage.get("eb_on_time")
+        eb_off = self._fmt_time(eb_off_t)
+        eb_on = self._fmt_time(eb_on_t)
+        eb_total_dhm = self._fmt_duration_dhm(eb_off_t, eb_on_t)
 
         timing_lines = [
-            f"EB:   Switched OFF @ {eb_off} & Switched ON @ {eb_on} - Total Hrs {eb_total}",
+            f"EB (main supply)",
+            f"  Power cut: {eb_off}   Resumed: {eb_on}   Total duration: {eb_total_dhm}",
+            "",
+            "DG (generators)",
         ]
-        for idx, key in enumerate(['gen1', 'gen2', 'gen3'], start=1):
+        for idx, key in enumerate(["gen1", "gen2", "gen3"], start=1):
             g = outage.get(key, {})
-            on_t = g.get('on')
-            off_t = g.get('off')
+            on_t = g.get("on")
+            off_t = g.get("off")
             on_s = self._fmt_time(on_t)
             off_s = self._fmt_time(off_t)
-            total = self._fmt_duration(on_t, off_t)
+            runtime = self._fmt_duration_dhm(on_t, off_t)
             timing_lines.append(
-                f"DG-{idx}: Switched ON @ {on_s} & Switched OFF @ {off_s} - Total Hrs {total}"
+                f"  DG-{idx}  Switch ON: {on_s}   Switch OFF: {off_s}   Run time: {runtime}"
             )
 
-        reason_text = outage.get('reason') or "to be updated"
+        reason_text = outage.get("reason") or "to be updated"
         reason_line = f"Reason: {reason_text}"
 
-        event_dt = self._fmt_time(outage.get('eb_off_time') or time.time())
+        event_dt = self._fmt_time(outage.get("eb_off_time") or time.time())
         subject = f"Power Cut Information - {event_dt}"
 
-        body = (
-            "Greetings!!\n\n"
-            "Sub: Power Cut Information -Reg\n\n"
+        body_plain = (
+            "Greetings,\n\n"
+            "Subject: Power Cut Information\n\n"
             + "\n".join(timing_lines)
             + f"\n\n{reason_line}\n\n"
-            "Thank you"
+            "Thank you."
         )
 
+        body_html = self._render_outage_html(outage, reason_text)
+
         try:
-            success = self._send_smtp(subject, body)
+            success = self._send_smtp(subject, body_plain, body_html)
             if success:
                 self.last_notification_time = time.time()
             return success
