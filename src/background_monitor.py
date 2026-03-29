@@ -80,7 +80,8 @@ class BackgroundMonitor:
         self._outage_active: bool = False
         self._outage_email_sent: bool = False
 
-        # 60-second timer: fires if no DG / reason within 1 min of EB going OFF
+        # After EB restores: 60s window for reason pins; else email with "to be updated"
+        self._awaiting_reason_after_restore: bool = False
         self._pending_email_timer: Optional[threading.Timer] = None
 
         # Legacy outage DB tracking
@@ -140,16 +141,25 @@ class BackgroundMonitor:
 
             self.current_states[input_id] = state
 
-            # ── Reason pins ──────────────────────────────────────────────────
-            if input_id in ('reason_ext', 'reason_trip', 'reason_fuse') and state == 1:
-                reason_map = {
-                    'reason_ext':  'External Power Cut',
-                    'reason_trip': 'Internal Trip',
-                    'reason_fuse': 'Fuse Blown',
-                }
-                self._outage['reason'] = reason_map[input_id]
-                logger.info(f"Reason captured: {self._outage['reason']}")
-                return  # reason pins don't go to DB
+            # ── Reason pins (never stored in DB; email only after EB restore) ─
+            if input_id in ('reason_ext', 'reason_trip', 'reason_fuse'):
+                if (
+                    state == 1
+                    and self._awaiting_reason_after_restore
+                    and not self._outage_email_sent
+                ):
+                    reason_map = {
+                        'reason_ext':  'External Power Cut',
+                        'reason_trip': 'Internal Trip',
+                        'reason_fuse': 'Fuse Blown',
+                    }
+                    self._outage['reason'] = reason_map[input_id]
+                    logger.info(f"Reason pin HIGH — sending email: {self._outage['reason']}")
+                    self._cancel_pending_timer()
+                    self._send_outage_email(bypass_rate_limit=True)
+                    self._outage_email_sent = True
+                    self._awaiting_reason_after_restore = False
+                return
 
             # ── DB event recording (only for power/generator inputs) ─────────
             event_id = self.db_writer.record_event(
@@ -163,43 +173,41 @@ class BackgroundMonitor:
             else:
                 logger.error("Failed to record event in database")
 
-            # ── EB OFF → power cut detected ──────────────────────────────────
+            # ── EB OFF → power cut detected (no email yet) ───────────────────
             if input_id == 'eb' and state == 0:
                 logger.warning("POWER OUTAGE DETECTED — EB went OFF")
+                self._cancel_pending_timer()
+                self._awaiting_reason_after_restore = False
                 self._outage = _empty_outage()
                 self._outage['eb_off_time'] = timestamp
                 self._outage_active = True
                 self._outage_email_sent = False
                 self._record_outage_start(timestamp)
-                # Start 60-second fallback timer
-                self._cancel_pending_timer()
-                t = threading.Timer(60.0, self._send_fallback_email)
-                t.daemon = True
-                t.start()
-                self._pending_email_timer = t
 
-            # ── EB ON → power restored ───────────────────────────────────────
+            # ── EB ON → power restored: start 60s window for reason pins ─────
             elif input_id == 'eb' and state == 1:
                 logger.info("POWER RESTORED — EB is back ON")
                 self._cancel_pending_timer()
                 if self._outage_active:
                     self._outage['eb_on_time'] = timestamp
                     self._record_outage_end(timestamp)
-                    # Mark any DGs still running as "off" at restore time
                     for g in ('gen1', 'gen2', 'gen3'):
                         if self._outage[g]['on'] and not self._outage[g]['off']:
                             self._outage[g]['off'] = timestamp
-                    self._send_outage_email(bypass_rate_limit=False)
+                    self._outage['reason'] = None
+                    self._outage_email_sent = False
+                    self._awaiting_reason_after_restore = True
+                    t = threading.Timer(60.0, self._send_post_restore_timeout_email)
+                    t.daemon = True
+                    t.start()
+                    self._pending_email_timer = t
+                    logger.info("60s window started — press a reason pin or email sends as 'to be updated'")
                 self._outage_active = False
 
-            # ── Generator state change ────────────────────────────────────────
+            # ── Generator state change (DB only — no email) ─────────────────
             elif input_id in ('gen1', 'gen2', 'gen3'):
                 if state == 1:
                     self._handle_generator_activation(input_id, timestamp)
-                    if self._outage_active and not self._outage_email_sent:
-                        self._cancel_pending_timer()
-                        self._send_outage_email(bypass_rate_limit=True)
-                        self._outage_email_sent = True
                 elif state == 0 and self._outage_active:
                     if not self._outage[input_id]['off']:
                         self._outage[input_id]['off'] = timestamp
@@ -258,15 +266,18 @@ class BackgroundMonitor:
         except Exception as e:
             logger.error(f"Failed to send outage email: {e}")
 
-    def _send_fallback_email(self) -> None:
-        """Fired 60s after EB went OFF if no DG activated yet."""
+    def _send_post_restore_timeout_email(self) -> None:
+        """Fired 60s after EB came back if no reason pin went HIGH."""
+        self._pending_email_timer = None
         if self._outage_email_sent:
             return
-        self._outage_email_sent = True
-        if not self._outage.get('reason'):
-            self._outage['reason'] = "to be updated"
-        logger.warning("60s elapsed with no DG/reason — sending fallback email")
+        if not self._awaiting_reason_after_restore:
+            return
+        self._outage['reason'] = "to be updated"
+        logger.info("60s after EB restore — no reason pin; sending email with 'to be updated'")
         self._send_outage_email(bypass_rate_limit=True)
+        self._outage_email_sent = True
+        self._awaiting_reason_after_restore = False
 
     # ──────────────────────────────────────────────────────────────────────────
     # Service lifecycle
