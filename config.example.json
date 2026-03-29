@@ -30,6 +30,16 @@
     "window_width": 1200,
     "window_height": 800
   },
+  "email": {
+    "enabled": false,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_username": "your_email@gmail.com",
+    "smtp_password": "your_app_password_here",
+    "from": "your_email@gmail.com",
+    "to": ["recipient1@example.com", "recipient2@example.com"],
+    "rate_limit_seconds": 300
+  },
   "default_filters": {
     "input_id": null,
     "start_time": null,
