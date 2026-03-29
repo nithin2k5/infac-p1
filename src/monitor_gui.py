@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Dict, Any, Optional, List, Tuple
 import csv
 import threading
@@ -218,7 +218,7 @@ class MonitorGUI:
         # Title
         title_label = ttk.Label(
             self.dashboard_frame,
-            text="Generator Power Status Monitor",
+            text="Power Status Monitor",
             font=("Arial", 16, "bold")
         )
         title_label.grid(row=0, column=0, pady=(0, 10), sticky="w")
@@ -397,15 +397,14 @@ class MonitorGUI:
             "Power Cuts ( EA )",
             "DG Change Overs ( EA )",
         ]
-        col_widths = [7, 18, 18, 18, 14, 16]
+        col_widths = [7, 22, 22, 22, 16, 18]
         for c, (h, w) in enumerate(zip(headers, col_widths)):
             ttk.Label(
                 parent, text=h,
                 font=("Arial", 8, "bold"),
                 width=w,
                 anchor="center",
-                wraplength=120 if c > 0 else 0,
-            ).grid(row=1, column=c, padx=4, pady=2, sticky="ew")
+            ).grid(row=1, column=c, padx=4, pady=2, sticky="nsew")
 
         self._summary_rows = {}
         row_labels = [
@@ -424,15 +423,15 @@ class MonitorGUI:
             power_cuts_var = tk.StringVar(value="-")
             dg_change_var = tk.StringVar(value="-")
 
-            ttk.Label(parent, textvariable=on_var, font=("Arial", 9), width=18, anchor="center",
+            ttk.Label(parent, textvariable=on_var, font=("Arial", 9), width=22, anchor="center",
                       foreground="#009933").grid(row=r, column=1, padx=4, pady=2, sticky="ew")
-            ttk.Label(parent, textvariable=off_var, font=("Arial", 9), width=18, anchor="center",
+            ttk.Label(parent, textvariable=off_var, font=("Arial", 9), width=22, anchor="center",
                       foreground="#cc0000").grid(row=r, column=2, padx=4, pady=2, sticky="ew")
-            ttk.Label(parent, textvariable=dg_usage_var, font=("Arial", 9), width=18,
+            ttk.Label(parent, textvariable=dg_usage_var, font=("Arial", 9), width=22,
                       anchor="center").grid(row=r, column=3, padx=4, pady=2, sticky="ew")
-            ttk.Label(parent, textvariable=power_cuts_var, font=("Arial", 9), width=14,
+            ttk.Label(parent, textvariable=power_cuts_var, font=("Arial", 9), width=16,
                       anchor="center").grid(row=r, column=4, padx=4, pady=2, sticky="ew")
-            ttk.Label(parent, textvariable=dg_change_var, font=("Arial", 9), width=16,
+            ttk.Label(parent, textvariable=dg_change_var, font=("Arial", 9), width=18,
                       anchor="center").grid(row=r, column=5, padx=4, pady=2, sticky="ew")
 
             self._summary_rows[input_id] = {
@@ -500,15 +499,24 @@ class MonitorGUI:
         except Exception as e:
             logger.error(f"Error updating summary: {e}")
 
+    @staticmethod
+    def _graph_window_since_6am() -> Tuple[float, float]:
+        now = datetime.now()
+        today = date.today()
+        six_today = datetime(today.year, today.month, today.day, 6, 0, 0)
+        if now < six_today:
+            six_start = six_today - timedelta(days=1)
+        else:
+            six_start = six_today
+        return six_start.timestamp(), now.timestamp()
+
     def _update_graph(self) -> None:
         """Update the state history graph."""
         if not MATPLOTLIB_AVAILABLE or not hasattr(self, 'graph_ax'):
             return
         
         try:
-            # Get last 4 hours of events for better visualization
-            end_time = datetime.now().timestamp()
-            start_time = end_time - (4 * 3600)  # Last 4 hours
+            start_time, end_time = self._graph_window_since_6am()
             
             inputs = ['eb', 'gen1', 'gen2', 'gen3']
             input_names = {'eb': 'EB', 'gen1': 'GEN1', 'gen2': 'GEN2', 'gen3': 'GEN3'}
@@ -575,9 +583,16 @@ class MonitorGUI:
                     logger.error(f"Error plotting {input_id}: {e}")
             
             # Configure axis for time vs inputs
+            self.graph_ax.set_xlim(
+                datetime.fromtimestamp(start_time),
+                datetime.fromtimestamp(end_time),
+            )
             self.graph_ax.set_xlabel('Time', fontsize=10)
             self.graph_ax.set_ylabel('Inputs', fontsize=10)
-            self.graph_ax.set_title('EB / GEN1 / GEN2 / GEN3 Timeline (Last 4 Hours)', fontsize=12, fontweight='bold')
+            self.graph_ax.set_title(
+                'EB / GEN1 / GEN2 / GEN3 Timeline (since 6:00 AM local)',
+                fontsize=12, fontweight='bold',
+            )
             self.graph_ax.set_ylim(-0.5, 3.5)
             self.graph_ax.set_yticks([0, 1, 2, 3])
             self.graph_ax.set_yticklabels(['GEN3', 'GEN2', 'GEN1', 'EB'])
