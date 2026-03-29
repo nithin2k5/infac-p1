@@ -105,7 +105,8 @@ class BackgroundMonitor:
             input_names = {
                 'eb': 'EB (Electricity Board)',
                 'gen1': 'Generator 1',
-                'gen2': 'Generator 2'
+                'gen2': 'Generator 2',
+                'gen3': 'Generator 3',
             }
             input_name = input_names.get(input_id, input_id.upper())
             
@@ -138,7 +139,7 @@ class BackgroundMonitor:
                 self._handle_power_restored(timestamp)
             
             # Check for generator activation
-            elif input_id in ['gen1', 'gen2'] and state == 1:
+            elif input_id in ['gen1', 'gen2', 'gen3'] and state == 1:
                 self._handle_generator_activation(input_id, timestamp)
             
         except Exception as e:

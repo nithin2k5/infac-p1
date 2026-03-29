@@ -131,6 +131,30 @@ Status: Generator is now active.
         
         return True
     
+    def _reload_config(self) -> None:
+        """Re-read settings from config file so runtime changes (e.g. new recipients) are picked up."""
+        if not self.config:
+            return
+        try:
+            self.config.load()
+        except Exception as e:
+            logger.warning(f"Could not reload config before sending email: {e}")
+            return
+
+        self.enabled = self.config.get("email.enabled", False)
+        self.rate_limit_seconds = int(self.config.get("email.rate_limit_seconds", 300))
+        self.smtp_server = self.config.get("email.smtp_server", "smtp.gmail.com")
+        self.smtp_port = int(self.config.get("email.smtp_port", 587))
+        self.smtp_username = self.config.get("email.smtp_username", "")
+        self.smtp_password = self.config.get("email.smtp_password", "")
+        self.email_from = self.config.get("email.from", self.smtp_username or "")
+
+        to_val = self.config.get("email.to", "")
+        if isinstance(to_val, list):
+            self.emails_to = to_val
+        else:
+            self.emails_to = [e.strip() for e in str(to_val).split(",") if e.strip()]
+
     def _send_email(self, subject: str, message_body: str) -> bool:
         """Send message via SMTP."""
         try:
@@ -138,19 +162,18 @@ Status: Generator is now active.
             msg['From'] = self.email_from or ""
             msg['To'] = ", ".join(self.emails_to)
             msg['Subject'] = subject
-            
+
             msg.attach(MIMEText(message_body, 'plain'))
-            
-            # Connect to SMTP server
+
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             server.starttls()
             server.login(self.smtp_username or "", self.smtp_password or "")
             server.send_message(msg)
             server.quit()
-            
-            logger.info("Email message sent successfully.")
+
+            logger.info(f"Email sent to: {', '.join(self.emails_to)}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to send Email message: {e}")
             return False
@@ -172,12 +195,19 @@ Status: Generator is now active.
         Returns:
             True if message was sent (or rate-limited), False on error
         """
+        # Reload settings so recipients/credentials added via GUI are used
+        self._reload_config()
+
         if not self.enabled:
             logger.debug("Email notifications are disabled")
             return False
-        
+
+        if not all([self.smtp_username, self.smtp_password, self.emails_to]):
+            logger.warning("Email enabled but missing credentials or recipients — not sending")
+            return False
+
         if not self._check_rate_limit():
-            return False  # Rate limited
+            return False
         
         # Calculate interval
         interval_seconds = generator_start_time - outage_start_time
@@ -192,14 +222,28 @@ Status: Generator is now active.
         
         subject = f"Alert: {generator_name} Activated"
         
-        # Send message
         try:
             success = self._send_email(subject, message)
-            
             if success:
                 self.last_notification_time = time.time()
-            
             return success
         except Exception as e:
             logger.error(f"Error sending Email notification: {e}", exc_info=True)
             return False
+
+    def send_test_email(self) -> bool:
+        """Send a test email to verify SMTP settings and recipients."""
+        self._reload_config()
+
+        if not all([self.smtp_username, self.smtp_password, self.emails_to]):
+            logger.warning("Test email: missing credentials or recipients")
+            return False
+
+        subject = "Power Monitor — Test Email"
+        body = (
+            "This is a test email from your Power Monitor application.\n\n"
+            "If you received this, your email notification settings are working correctly.\n\n"
+            f"Recipients: {', '.join(self.emails_to)}\n"
+            f"Sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        return self._send_email(subject, body)

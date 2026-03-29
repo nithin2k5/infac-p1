@@ -1558,12 +1558,10 @@ METADATA
         self.rate_limit_var = tk.StringVar(value=str(self.config.get("email.rate_limit_seconds", 300)))
         ttk.Entry(smtp_frame, textvariable=self.rate_limit_var, width=10).grid(row=6, column=1, sticky="w", pady=5)
         
-        # Save Button for SMTP
-        ttk.Button(
-            smtp_frame, 
-            text="Save SMTP Settings", 
-            command=self._save_email_settings
-        ).grid(row=7, column=0, columnspan=2, pady=20)
+        btn_row = ttk.Frame(smtp_frame)
+        btn_row.grid(row=7, column=0, columnspan=2, pady=20)
+        ttk.Button(btn_row, text="Save SMTP Settings", command=self._save_email_settings).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_row, text="Send Test Email", command=self._send_test_email).pack(side=tk.LEFT, padx=5)
         
         # --- Right Column: Recipient List ---
         recipients_frame = ttk.LabelFrame(self.settings_frame, text="Email Recipients", padding="15")
@@ -1663,6 +1661,27 @@ METADATA
             messagebox.showinfo("Success", "Email settings saved successfully!")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save settings: {e}")
+
+    def _send_test_email(self) -> None:
+        """Send a test email using current saved settings."""
+        from .email_sender import EmailSender
+        try:
+            self._save_email_settings()
+            sender = EmailSender(self.config)
+            success = sender.send_test_email()
+            if success:
+                messagebox.showinfo("Test Email", "Test email sent successfully! Check your inbox.")
+            else:
+                messagebox.showerror(
+                    "Test Email Failed",
+                    "Failed to send test email.\n\nCheck:\n"
+                    "• Email Notifications is enabled\n"
+                    "• SMTP credentials are correct\n"
+                    "• At least one recipient is added\n"
+                    "• App password is used (not regular password) for Gmail"
+                )
+        except Exception as e:
+            messagebox.showerror("Test Email Error", f"Error: {e}")
 
     def _add_recipient(self) -> None:
         """Add a new recipient email address."""
