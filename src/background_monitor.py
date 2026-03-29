@@ -57,12 +57,13 @@ class BackgroundMonitor:
 
         # Initialize Email sender
         self.email = EmailSender(self.config)
-        
+
         # State tracking
         self.running: bool = False
         self.start_time: Optional[datetime] = None
         self.eb_outage_start_time: Optional[float] = None
         self.current_outage_id: Optional[int] = None
+        self.current_states: dict = {'eb': None, 'gen1': None, 'gen2': None, 'gen3': None}
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -101,20 +102,22 @@ class BackgroundMonitor:
             timestamp: Unix timestamp of change
         """
         try:
-            # Get input name
             input_names = {
-                'eb': 'EB (Electricity Board)',
+                'eb':   'EB (Electricity Board)',
                 'gen1': 'Generator 1',
                 'gen2': 'Generator 2',
                 'gen3': 'Generator 3',
             }
             input_name = input_names.get(input_id, input_id.upper())
-            
+
             logger.info(
                 f"State change: {input_name} -> {'ON' if state == 1 else 'OFF'} "
                 f"at {datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
             )
-            
+
+            # Update current state tracking
+            self.current_states[input_id] = state
+
             # Record event in database
             event_id = self.db_writer.record_event(
                 input_id=input_id,
@@ -122,26 +125,30 @@ class BackgroundMonitor:
                 state=state,
                 timestamp=timestamp
             )
-            
+
             if event_id:
                 logger.info(f"Event recorded with ID: {event_id}")
             else:
                 logger.error("Failed to record event in database")
-            
-            # Check for power outage (EB went OFF)
+
+            # Power outage: EB went OFF
             if input_id == 'eb' and state == 0:
-                logger.warning("⚠️ POWER OUTAGE DETECTED - EB went OFF")
+                logger.warning("POWER OUTAGE DETECTED - EB went OFF")
                 self._handle_power_outage(timestamp)
-            
-            # Check for power restoration (EB came back ON)
+                self._send_status_email(timestamp)
+
+            # Power restored: EB came back ON
             elif input_id == 'eb' and state == 1:
-                logger.info("✓ POWER RESTORED - EB is back ON")
+                logger.info("POWER RESTORED - EB is back ON")
                 self._handle_power_restored(timestamp)
-            
-            # Check for generator activation
-            elif input_id in ['gen1', 'gen2', 'gen3'] and state == 1:
-                self._handle_generator_activation(input_id, timestamp)
-            
+                self._send_status_email(timestamp)
+
+            # Generator state change
+            elif input_id in ['gen1', 'gen2', 'gen3']:
+                if state == 1:
+                    self._handle_generator_activation(input_id, timestamp)
+                self._send_status_email(timestamp)
+
         except Exception as e:
             logger.error(f"Error handling state change: {e}", exc_info=True)
     
@@ -250,49 +257,42 @@ class BackgroundMonitor:
             self.eb_outage_start_time = None
             self.current_outage_id = None
     
+    def _send_status_email(self, timestamp: float) -> None:
+        """Send a power status email with the current state of all inputs."""
+        try:
+            self.email.send_power_status_notification(
+                states=self.current_states,
+                event_time=timestamp
+            )
+        except Exception as e:
+            logger.error(f"Failed to send status email: {e}")
+
     def _handle_generator_activation(self, generator_id: str, timestamp: float) -> None:
-        """Handle generator activation and send Email notification."""
+        """Record generator activation against the current outage."""
         eb_start = self.eb_outage_start_time
         if not eb_start:
-            # Generator turned on but no outage recorded
             return
-        
-        # Calculate interval time (power cut to generator ON)
+
         interval_seconds = timestamp - eb_start
-        
         generator_names = {
             'gen1': 'Generator 1 (GEN1)',
-            'gen2': 'Generator 2 (GEN2)'
+            'gen2': 'Generator 2 (GEN2)',
+            'gen3': 'Generator 3 (GEN3)',
         }
         generator_name = generator_names.get(generator_id, generator_id.upper())
-        
-        logger.info(
-            f"{generator_name} activated {interval_seconds:.1f} seconds after power cut"
-        )
-        
-        # Send Email notification
-        notification_sent = False
-        try:
-            notification_sent = self.email.send_generator_activation_notification(
-                generator_name=generator_name,
-                outage_start_time=eb_start,
-                generator_start_time=timestamp
-            )
-            
-            # Update outage record with generator info and notification status
-            if self.current_outage_id:
-                try:
-                    self.db_writer.update_outage_generator(
-                        self.current_outage_id, 
-                        generator_id, 
-                        timestamp,
-                        notification_sent=notification_sent
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to update outage generator in database: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Failed to send Email notification: {e}")
+
+        logger.info(f"{generator_name} activated {interval_seconds:.1f}s after power cut")
+
+        if self.current_outage_id:
+            try:
+                self.db_writer.update_outage_generator(
+                    self.current_outage_id,
+                    generator_id,
+                    timestamp,
+                    notification_sent=False
+                )
+            except Exception as e:
+                logger.error(f"Failed to update outage generator in database: {e}")
     
     def get_status(self) -> dict:
         """Get current service status."""
