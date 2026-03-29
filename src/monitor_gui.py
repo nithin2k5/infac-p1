@@ -383,55 +383,86 @@ class MonitorGUI:
 
     def _build_summary_section(self, parent) -> None:
         """Build the today's summary table inside the given LabelFrame."""
-        self._summary_range_var = tk.StringVar(value="Today  6:00 AM  →  --:-- --")
+        self._summary_range_var = tk.StringVar(value="Today ( 6AM ~ )")
         ttk.Label(parent, textvariable=self._summary_range_var,
                   font=("Arial", 9), foreground="gray").grid(
-            row=0, column=0, columnspan=4, sticky="w", pady=(0, 6)
+            row=0, column=0, columnspan=6, sticky="w", pady=(0, 6)
         )
 
-        headers = ["", "Power ON Duration", "Power OFF Duration", "Power Cuts / Activations"]
-        col_widths = [8, 22, 22, 22]
+        headers = [
+            "",
+            "Power ON duration ( Hrs )",
+            "Power OFF duration ( Hrs )",
+            "DG Usage Duration ( Hrs )",
+            "Power Cuts ( EA )",
+            "DG Change Overs ( EA )",
+        ]
+        col_widths = [7, 18, 18, 18, 14, 16]
         for c, (h, w) in enumerate(zip(headers, col_widths)):
             ttk.Label(
                 parent, text=h,
-                font=("Arial", 9, "bold"),
+                font=("Arial", 8, "bold"),
                 width=w,
-                anchor="center"
-            ).grid(row=1, column=c, padx=6, pady=2, sticky="ew")
+                anchor="center",
+                wraplength=120 if c > 0 else 0,
+            ).grid(row=1, column=c, padx=4, pady=2, sticky="ew")
 
         self._summary_rows = {}
         row_labels = [
-            ("eb",   "EB"),
-            ("gen1", "GEN1"),
-            ("gen2", "GEN2"),
-            ("gen3", "GEN3"),
+            ("eb", "EB"),
+            ("gen1", "DG-1"),
+            ("gen2", "DG-2"),
+            ("gen3", "DG-3"),
         ]
         for r, (input_id, label) in enumerate(row_labels, start=2):
-            ttk.Label(parent, text=label, font=("Arial", 9, "bold"), width=8, anchor="w").grid(
-                row=r, column=0, padx=(10, 4), pady=2, sticky="w"
+            ttk.Label(parent, text=label, font=("Arial", 9, "bold"), width=7, anchor="w").grid(
+                row=r, column=0, padx=(8, 4), pady=2, sticky="w"
             )
-            on_var   = tk.StringVar(value="-")
-            off_var  = tk.StringVar(value="-")
-            cuts_var = tk.StringVar(value="-")
+            on_var = tk.StringVar(value="-")
+            off_var = tk.StringVar(value="-")
+            dg_usage_var = tk.StringVar(value="-")
+            power_cuts_var = tk.StringVar(value="-")
+            dg_change_var = tk.StringVar(value="-")
 
-            ttk.Label(parent, textvariable=on_var, font=("Arial", 9), width=22, anchor="center",
-                      foreground="#009933").grid(row=r, column=1, padx=6, pady=2, sticky="ew")
-            ttk.Label(parent, textvariable=off_var, font=("Arial", 9), width=22, anchor="center",
-                      foreground="#cc0000").grid(row=r, column=2, padx=6, pady=2, sticky="ew")
-            ttk.Label(parent, textvariable=cuts_var, font=("Arial", 9), width=22,
-                      anchor="center").grid(row=r, column=3, padx=6, pady=2, sticky="ew")
+            ttk.Label(parent, textvariable=on_var, font=("Arial", 9), width=18, anchor="center",
+                      foreground="#009933").grid(row=r, column=1, padx=4, pady=2, sticky="ew")
+            ttk.Label(parent, textvariable=off_var, font=("Arial", 9), width=18, anchor="center",
+                      foreground="#cc0000").grid(row=r, column=2, padx=4, pady=2, sticky="ew")
+            ttk.Label(parent, textvariable=dg_usage_var, font=("Arial", 9), width=18,
+                      anchor="center").grid(row=r, column=3, padx=4, pady=2, sticky="ew")
+            ttk.Label(parent, textvariable=power_cuts_var, font=("Arial", 9), width=14,
+                      anchor="center").grid(row=r, column=4, padx=4, pady=2, sticky="ew")
+            ttk.Label(parent, textvariable=dg_change_var, font=("Arial", 9), width=16,
+                      anchor="center").grid(row=r, column=5, padx=4, pady=2, sticky="ew")
 
-            self._summary_rows[input_id] = (on_var, off_var, cuts_var)
+            self._summary_rows[input_id] = {
+                "on": on_var,
+                "off": off_var,
+                "dg_usage": dg_usage_var,
+                "power_cuts": power_cuts_var,
+                "dg_change": dg_change_var,
+            }
 
-        for c in range(4):
+        for c in range(6):
             parent.columnconfigure(c, weight=1 if c > 0 else 0)
 
-    def _format_hrs(self, seconds: float) -> str:
-        """Format seconds as H:MM Hrs."""
+    def _format_summary_on_hrs(self, seconds: float) -> str:
         seconds = abs(seconds)
         h = int(seconds // 3600)
         m = int((seconds % 3600) // 60)
-        return f"{h}:{m:02d} Hrs"
+        return f"{h}:{m:02d}Hrs"
+
+    def _format_summary_eb_off_hrs(self, seconds: float) -> str:
+        seconds = abs(seconds)
+        if seconds <= 0:
+            return "0.0Hrs"
+        return f"{round(seconds / 3600.0, 1):.1f}Hrs"
+
+    def _format_summary_dg_usage(self, seconds: float) -> str:
+        seconds = abs(seconds)
+        if seconds <= 0:
+            return "-"
+        return f"{round(seconds / 3600.0, 1):.1f}"
 
     def _update_summary(self) -> None:
         """Refresh the daily summary labels."""
@@ -443,18 +474,29 @@ class MonitorGUI:
 
             # Update live range text
             if hasattr(self, '_summary_range_var'):
-                self._summary_range_var.set(
-                    f"Today  6:00 AM  →  {now.strftime('%I:%M %p')}"
-                )
+                t = now.strftime("%I:%M %p")
+                if t.startswith("0"):
+                    t = t[1:]
+                self._summary_range_var.set(f"Today ( 6AM ~ {t} )")
 
             data = self.db.get_daily_summary(since_hour=6)
-            for input_id, (on_var, off_var, cuts_var) in self._summary_rows.items():
+            for input_id, v in self._summary_rows.items():
                 d = data.get(input_id, {})
-                on_var.set(self._format_hrs(d.get('on_seconds', 0)))
-                off_var.set(self._format_hrs(d.get('off_seconds', 0)))
-                # EB shows power cuts; generators show activations
-                count = d.get('power_cuts', 0)
-                cuts_var.set(str(count))
+                on_s = float(d.get("on_seconds", 0) or 0)
+                off_s = float(d.get("off_seconds", 0) or 0)
+                cnt = int(d.get("power_cuts", 0) or 0)
+                if input_id == "eb":
+                    v["on"].set(self._format_summary_on_hrs(on_s))
+                    v["off"].set(self._format_summary_eb_off_hrs(off_s))
+                    v["dg_usage"].set("-")
+                    v["power_cuts"].set(str(cnt))
+                    v["dg_change"].set("")
+                else:
+                    v["on"].set("")
+                    v["off"].set("-")
+                    v["dg_usage"].set(self._format_summary_dg_usage(on_s))
+                    v["power_cuts"].set("")
+                    v["dg_change"].set(str(cnt) if cnt > 0 else "-")
         except Exception as e:
             logger.error(f"Error updating summary: {e}")
 
