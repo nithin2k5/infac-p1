@@ -61,9 +61,10 @@ class MonitorGUI:
             )
             sys.exit(1)
         
-        # UI configuration
+        # UI configuration (refresh from DB matches GPIO poll rate unless ui overrides)
         ui_config = self.config.get_ui_config()
-        self.auto_refresh_interval = ui_config.get("auto_refresh_interval", 30)
+        gpio_poll = float(self.config.get("gpio.poll_interval", 0.5))
+        self.auto_refresh_interval = float(ui_config.get("auto_refresh_interval", gpio_poll))
         self.page_size = ui_config.get("default_page_size", 100)
         self.show_utc = ui_config.get("show_utc", False)
         
@@ -286,7 +287,7 @@ class MonitorGUI:
         self.dashboard_auto_refresh_var = tk.BooleanVar()
         dashboard_auto_refresh_cb = ttk.Checkbutton(
             refresh_frame,
-            text="Auto-refresh (30s)",
+            text=f"Auto-refresh ({self.auto_refresh_interval:g}s)",
             variable=self.dashboard_auto_refresh_var,
             command=self.toggle_dashboard_auto_refresh
         )
@@ -794,8 +795,9 @@ class MonitorGUI:
         self.interval_var = tk.StringVar(value=str(self.auto_refresh_interval))
         interval_spin = ttk.Spinbox(
             right_frame,
-            from_=5,
+            from_=0.5,
             to=300,
+            increment=0.5,
             textvariable=self.interval_var,
             width=5
         )

@@ -19,7 +19,6 @@
     }
   },
   "ui": {
-    "auto_refresh_interval": 30,
     "default_page_size": 100,
     "show_utc": false,
     "window_width": 1200,

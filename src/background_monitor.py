@@ -41,11 +41,14 @@ class BackgroundMonitor:
             database=db_config.get("database", "ebpc")
         )
         
-        # Initialize GPIO reader
+        gpio_cfg = self.config.get("gpio", {}) or {}
+        poll_interval = float(gpio_cfg.get("poll_interval", 0.5))
+        debounce_time = float(gpio_cfg.get("debounce_time", 0.1))
+
         self.gpio_reader = GPIOReader(
             on_state_change=self._handle_state_change,
-            poll_interval=0.5,
-            debounce_time=0.1
+            poll_interval=poll_interval,
+            debounce_time=debounce_time,
         )
 
         # Status LED: HIGH = service running, LOW = stopped/crashed

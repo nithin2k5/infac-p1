@@ -57,7 +57,6 @@ class Config:
                 "database": "rpi_monitor"
             },
             "ui": {
-                "auto_refresh_interval": 30,
                 "default_page_size": 100,
                 "show_utc": False,
                 "window_width": 1200,
